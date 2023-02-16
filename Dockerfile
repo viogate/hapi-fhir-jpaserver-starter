@@ -43,6 +43,8 @@ FROM gcr.io/distroless/java17-debian11:nonroot as default
 USER 65532:65532
 WORKDIR /app
 
+RUN mkdir target && chown -R 65532:65532 target
+
 COPY --chown=nonroot:nonroot --from=build-distroless /app /app
 COPY --chown=nonroot:nonroot --from=build-hapi /tmp/hapi-fhir-jpaserver-starter/opentelemetry-javaagent.jar /app
 
