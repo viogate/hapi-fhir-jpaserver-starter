@@ -28,15 +28,15 @@ pipeline {
                     sh "git checkout -f -B ${env.BRANCH_NAME} HEAD"
                 }
                 script {
-                    def prefix = env.BRANCH_NAME.replaceAll('_', '.').replaceAll('viollier.', '')
-                    def lastBranchTag = sh(script: "git tag -l '${prefix}-[0-9]*' | sort -rn -t . -k 3 | head -1", returnStdout: true).trim()
+                    def prefix = env.BRANCH_NAME.replaceAll('_', '.').replaceAll('viollier.', '') + "-vio-"
+                    def lastBranchTag = sh(script: "git tag -l '${prefix}[0-9]*' | sort -rn -t . -k 3 | head -1", returnStdout: true).trim()
                     if (!lastBranchTag.isEmpty()) {
                         println "Found previous branch build with tag: '${lastBranchTag}'"
                         def suffix = Integer.parseInt(lastBranchTag.split("-").last()) + 1
-                        version = "${prefix}-${suffix}"
+                        version = "${prefix}${suffix}"
                     } else {
-                        println "New branch. Branch builds will be prefixed with: '${prefix}-'"
-                        version = "${prefix}-1"
+                        println "New branch. Branch builds will be prefixed with: '${prefix}'"
+                        version = "${prefix}1"
                     }
                     echo "Feature branch, next version is: ${version}"
 
