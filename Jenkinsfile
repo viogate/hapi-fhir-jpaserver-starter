@@ -38,7 +38,7 @@ pipeline {
                         println "New branch. Branch builds will be prefixed with: '${env.BRANCH_NAME}-'"
                         version = "${env.BRANCH_NAME}-1"
                     }
-                    dockerVersion = version.replaceAll('_', '.')
+                    dockerVersion = version.replaceAll('_', '.').replaceAll('viollier.', '')
                     echo "Feature branch, next version is: ${version}, docker version is: ${dockerVersion}"
 
                     currentBuild.description = "Artifact version $version"
