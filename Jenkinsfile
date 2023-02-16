@@ -4,7 +4,6 @@ import groovy.json.JsonSlurper
 import be.cegeka.jenkins.*
 
 def version = ""
-def dockerVersion = ""
 def SSH_PRIVATE_KEY = 'ssh-github'
 def success = true
 
@@ -29,17 +28,17 @@ pipeline {
                     sh "git checkout -f -B ${env.BRANCH_NAME} HEAD"
                 }
                 script {
+                    def prefix = env.BRANCH_NAME.replaceAll('_', '.').replaceAll('viollier.', '')
                     def lastBranchTag = sh(script: "git tag -l '${env.BRANCH_NAME}-[0-9]*' | grep '${env.BRANCH_NAME}-[0-9]*\$' | sort -rn -t . -k 3 | head -1", returnStdout: true).trim()
                     if (!lastBranchTag.isEmpty()) {
                         println "Found previous branch build with tag: '${lastBranchTag}'"
                         def suffix = Integer.parseInt(lastBranchTag.split("-").last()) + 1
-                        version = "${env.BRANCH_NAME}-${suffix}"
+                        version = "${prefix}-${suffix}"
                     } else {
-                        println "New branch. Branch builds will be prefixed with: '${env.BRANCH_NAME}-'"
-                        version = "${env.BRANCH_NAME}-1"
+                        println "New branch. Branch builds will be prefixed with: '${prefix}-'"
+                        version = "${prefix}-1"
                     }
-                    dockerVersion = version.replaceAll('_', '.').replaceAll('viollier.', '')
-                    echo "Feature branch, next version is: ${version}, docker version is: ${dockerVersion}"
+                    echo "Feature branch, next version is: ${version}"
 
                     currentBuild.description = "Artifact version $version"
                 }
@@ -47,7 +46,7 @@ pipeline {
         }
         stage('Build') {
             steps {
-                sh "./build-docker-image.sh ${dockerVersion}"
+                sh "./build-docker-image.sh ${version}"
             }
         }
         stage('Tag') {
@@ -74,7 +73,7 @@ pipeline {
                 expression { success }
             }
             steps {
-                sh "docker push docker-dev.artifactory.viollier.ch/hapi-fhir-jpaserver-starter:${dockerVersion}"
+                sh "docker push docker-dev.artifactory.viollier.ch/hapi-fhir-jpaserver-starter:${version}"
             }
         }
     }
@@ -83,9 +82,9 @@ pipeline {
         //    junit '**/build/test-results/**/*.xml'
         //}
         cleanup {
-            echo "Clearing docker containers from version ${dockerVersion}"
+            echo "Clearing docker containers from version ${version}"
             sh "set +e"
-            sh "docker rmi docker-dev.artifactory.viollier.ch/hapi-fhir-jpaserver-starter:${dockerVersion}"
+            sh "docker rmi docker-dev.artifactory.viollier.ch/hapi-fhir-jpaserver-starter:${version}"
 
             sh "docker image prune -f"
 
