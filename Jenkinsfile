@@ -4,6 +4,7 @@ import groovy.json.JsonSlurper
 import be.cegeka.jenkins.*
 
 def version = ""
+def dockerVersion = ""
 def SSH_PRIVATE_KEY = 'ssh-github'
 def success = true
 
@@ -37,7 +38,8 @@ pipeline {
                         println "New branch. Branch builds will be prefixed with: '${env.BRANCH_NAME}-'"
                         version = "${env.BRANCH_NAME}-1"
                     }
-                    echo "Feature branch, next version is: ${version}"
+                    dockerVersion = version.replaceAll('_', '.')
+                    echo "Feature branch, next version is: ${version}, docker version is: ${dockerVersion}"
 
                     currentBuild.description = "Artifact version $version"
                 }
@@ -45,7 +47,7 @@ pipeline {
         }
         stage('Build') {
             steps {
-                sh "./build-docker-image.sh ${version}"
+                sh "./build-docker-image.sh ${dockerVersion}"
             }
         }
         stage('Tag') {
@@ -72,7 +74,7 @@ pipeline {
                 expression { success }
             }
             steps {
-                sh "docker push docker-dev.artifactory.viollier.ch/hapi-fhir-jpaserver-starter:${version}"
+                sh "docker push docker-dev.artifactory.viollier.ch/hapi-fhir-jpaserver-starter:${dockerVersion}"
             }
         }
     }
@@ -81,9 +83,9 @@ pipeline {
         //    junit '**/build/test-results/**/*.xml'
         //}
         cleanup {
-            echo "Clearing docker containers from version ${version}"
+            echo "Clearing docker containers from version ${dockerVersion}"
             sh "set +e"
-            sh "docker rmi docker-dev.artifactory.viollier.ch/hapi-fhir-jpaserver-starter:${version}"
+            sh "docker rmi docker-dev.artifactory.viollier.ch/hapi-fhir-jpaserver-starter:${dockerVersion}"
 
             sh "docker image prune -f"
 
