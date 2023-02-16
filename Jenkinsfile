@@ -29,7 +29,7 @@ pipeline {
                 }
                 script {
                     def prefix = env.BRANCH_NAME.replaceAll('_', '.').replaceAll('viollier.', '')
-                    def lastBranchTag = sh(script: "git tag -l '${env.BRANCH_NAME}-[0-9]*' | grep '${env.BRANCH_NAME}-[0-9]*\$' | sort -rn -t . -k 3 | head -1", returnStdout: true).trim()
+                    def lastBranchTag = sh(script: "git tag -l '${prefix}-[0-9]*' | sort -rn -t . -k 3 | head -1", returnStdout: true).trim()
                     if (!lastBranchTag.isEmpty()) {
                         println "Found previous branch build with tag: '${lastBranchTag}'"
                         def suffix = Integer.parseInt(lastBranchTag.split("-").last()) + 1
