@@ -21,6 +21,7 @@ import java.util.Objects;
 @EnableConfigurationProperties
 public class AppProperties {
 
+  private String path_prefix = "/fhir";
   private Boolean cql_enabled = false;
   private Boolean openapi_enabled = false;
   private Boolean mdm_enabled = false;
@@ -82,6 +83,14 @@ public class AppProperties {
   private Integer bundle_batch_pool_size = 20;
   private Integer bundle_batch_pool_max_size = 100;
   private final List<String> local_base_urls = new ArrayList<>();
+
+	public String getPath_prefix() {
+		return path_prefix;
+	}
+
+	public void setPath_prefix(String path_prefix) {
+		this.path_prefix = path_prefix;
+	}
 
 	public Boolean getOpenapi_enabled() {
 		return openapi_enabled;
