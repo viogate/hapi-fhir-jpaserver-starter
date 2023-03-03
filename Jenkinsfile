@@ -87,19 +87,19 @@ pipeline {
 //            }
 //        }
     }
-    post {
-        //always {
-        //    junit '**/build/test-results/**/*.xml'
-        //}
-        cleanup {
-            echo "Clearing docker containers from version ${version}"
-            sh "set +e"
-            sh "docker rmi docker-dev.artifactory.viollier.ch/hapi-fhir-jpaserver-starter:${version}"
-
-            sh "docker image prune -f"
-
-            sh "set -e"
-        }
-    }
+//    post {
+//        //always {
+//        //    junit '**/build/test-results/**/*.xml'
+//        //}
+//        cleanup {
+//            echo "Clearing docker containers from version ${version}"
+//            sh "set +e"
+//            sh "docker rmi docker-dev.artifactory.viollier.ch/hapi-fhir-jpaserver-starter:${version}"
+//
+//            sh "docker image prune -f"
+//
+//            sh "set -e"
+//        }
+//    }
 
 }
