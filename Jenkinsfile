@@ -15,7 +15,7 @@ pipeline {
     agent {
         // the node is selected by label, and only has 1 JDK installed
         // that matches the label
-        node { label 'java11chromium' }
+        node { label 'java17' }
     }
     triggers {
         pollSCM('H/5 * * * *')
@@ -42,6 +42,11 @@ pipeline {
 
                     currentBuild.description = "Artifact version $version"
                 }
+            }
+        }
+        stage('Test') {
+            steps {
+                sh "mvn clean test"
             }
         }
         stage('Build') {
