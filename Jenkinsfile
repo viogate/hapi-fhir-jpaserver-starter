@@ -21,6 +21,11 @@ pipeline {
         pollSCM('H/5 * * * *')
     }
     stages {
+        stage('dakke') {
+            steps {
+                echo "hello"
+            }
+        }
 //        stage('Determine version') {
 //            steps {
 //                sshagent(credentials: [SSH_PRIVATE_KEY]) {
