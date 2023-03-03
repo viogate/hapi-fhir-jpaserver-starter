@@ -1,11 +1,11 @@
 package com.cegeka.vconsult.fhir.server;
 
-import org.junit.Assert;
-import org.junit.Test;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 
-public class HelloWorldTest {
+class HelloWorldTest {
 	@Test
-	public void fail() {
-		Assert.fail("Hello");
+	void fail() {
+		Assertions.fail("Hello");
 	}
 }
