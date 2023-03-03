@@ -83,9 +83,9 @@ pipeline {
         }
     }
     post {
-        //always {
-        //    junit '**/build/test-results/**/*.xml'
-        //}
+        always {
+            junit '**/target/surefire-reports/TEST-*.xml'
+        }
         cleanup {
             echo "Clearing docker containers from version ${version}"
             sh "set +e"
