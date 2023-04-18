@@ -1,3 +1,11 @@
+# v-consult special stuff
+## Artifactory certificate
+Create a file `~/.mvn/jvm.config`
+```
+-Djavax.net.ssl.trustStore=/Users/<your-user>/.viollier/viollier-cacerts.jks -Djavax.net.ssl.trustStorePassword=changeit
+```
+Note: don't forget to fill in `<your-user>`
+
 # HAPI-FHIR Starter Project
 
 This project is a complete starter project you can use to deploy a FHIR server using HAPI FHIR JPA.
