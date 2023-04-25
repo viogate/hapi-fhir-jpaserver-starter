@@ -50,9 +50,6 @@ spring:
   ### elastic parameters ===> see also elasticsearch section below <===
 #      hibernate.search.backend.type: elasticsearch
 #      hibernate.search.backend.analysis.configurer: ca.uhn.fhir.jpa.search.HapiHSearchAnalysisConfigurers$HapiElasticAnalysisConfigurer
-fhirSync:
-  endpoint: 'http://ingressdev:8100'
-  draftPath: '/internal/v1/draft'
 
 hapi:
   fhir:
@@ -202,3 +199,7 @@ hapi:
 #  protocol: 'http'
 #  schema_management_strategy: CREATE
 #  username: SomeUsername
+
+fhirSync:
+  endpoint: 'http://ingressdev:8100'
+  draftPath: '/internal/v1/draft'

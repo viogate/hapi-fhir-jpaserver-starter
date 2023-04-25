@@ -184,3 +184,7 @@ hapi:
 #  protocol: 'http'
 #  schema_management_strategy: CREATE
 #  username: SomeUsername
+
+fhirSync:
+  endpoint: 'http://localhost:8080'
+  draftPath: '/internal/v1/draft'

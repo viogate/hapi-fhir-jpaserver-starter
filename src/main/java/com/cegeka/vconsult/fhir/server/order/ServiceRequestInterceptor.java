@@ -47,7 +47,9 @@ public class ServiceRequestInterceptor {
 	}
 
 	private boolean isRequestToCreateServiceRequest(RequestDetails requestDetails) {
-		return requestDetails.getResourceName().equals(ResourceType.ServiceRequest.name()) && requestDetails.getRestOperationType() == RestOperationTypeEnum.CREATE;
+		return requestDetails.getResourceName() != null &&
+			requestDetails.getResourceName().equals(ResourceType.ServiceRequest.name()) &&
+			requestDetails.getRestOperationType() == RestOperationTypeEnum.CREATE;
 	}
 
 	private void handleServiceRequestCreation(RequestDetails requestDetails, HttpServletResponse response) throws IOException {
