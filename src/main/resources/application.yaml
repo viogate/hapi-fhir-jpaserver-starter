@@ -201,5 +201,5 @@ hapi:
 #  username: SomeUsername
 
 fhirSync:
-  endpoint: 'http://ingressdev:8100'
-  draftPath: '/internal/v1/draft'
+  url: 'http://localhost:8100'
+  draftEndpoint: '/internal/v1/draft'

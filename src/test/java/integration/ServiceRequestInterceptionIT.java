@@ -32,8 +32,10 @@ public class ServiceRequestInterceptionIT {
 		"{" +
 			"\"resourceType\": \"ServiceRequest\"," +
 			"\"id\": \"001234234\"" +
-		"}";
+			"}";
 	private static final String LOCALHOST = "http://localhost:";
+	private static final String APPLICATION_FHIR_JSON = "application/fhir+json";
+	private static final String PARTITION = "D123";
 
 	@LocalServerPort
 	private int localPort;
@@ -41,8 +43,8 @@ public class ServiceRequestInterceptionIT {
 	@Autowired
 	private TestRestTemplate restTemplate;
 
-	@Value("${fhirSync.draftPath}")
-	private String fhirSyncDraftPath;
+	@Value("${fhirSync.draftEndpoint}")
+	private String fhirSyncDraftEndpoint;
 
 	private static int fhirSyncPort;
 
@@ -53,22 +55,23 @@ public class ServiceRequestInterceptionIT {
 
 	@DynamicPropertySource
 	static void registerDynamicProperties(DynamicPropertyRegistry registry) {
-		registry.add("fhirSync.endpoint", () -> "http://localhost:" + fhirSyncPort);
+		registry.add("fhirSync.url", () -> "http://localhost:" + fhirSyncPort);
 	}
 
 	@BeforeEach
 	public void initForEach() {
-		stubFor(post(fhirSyncDraftPath).willReturn(ok(FHIR_SYNC_RESPONSE_BODY)));
+		createPartition(PARTITION);
+		stubFor(post(fhirSyncDraftEndpoint + "/" + PARTITION).willReturn(ok(FHIR_SYNC_RESPONSE_BODY)));
 	}
 
 	@Test
-	public void serviceRequestPostIsInterceptedAndForwardedToFhirSync() {
+	public void serviceRequestPostWithPartitionIsInterceptedAndForwardedToFhirSync() {
 		String requestBody = "{ \"resourceType\": \"ServiceRequest\" }";
-		ResponseEntity<String> response = this.restTemplate.exchange(LOCALHOST + localPort + "/fhir/ServiceRequest", HttpMethod.POST, newRequest(requestBody), String.class);
+		ResponseEntity<String> response = restTemplate.exchange(LOCALHOST + localPort + "/fhir/{partition}/ServiceRequest", HttpMethod.POST, newRequest(requestBody), String.class, PARTITION);
 
 		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
 		assertThat(response.getBody()).isEqualTo(FHIR_SYNC_RESPONSE_BODY);
-		verify(postRequestedFor(urlEqualTo(fhirSyncDraftPath)));
+		verify(postRequestedFor(urlEqualTo(fhirSyncDraftEndpoint + "/" + PARTITION)));
 	}
 
 	@Test
@@ -79,22 +82,22 @@ public class ServiceRequestInterceptionIT {
 				"\"id\": \"A001234234\"" +
 			"}";
 
-		ResponseEntity<String> response = this.restTemplate.exchange(LOCALHOST + localPort + "/fhir/ServiceRequest/{id}", HttpMethod.PUT, newRequest(requestBody), String.class, Map.of("id", "A001234234"));
+		ResponseEntity<String> response = restTemplate.exchange(LOCALHOST + localPort + "/fhir/{partition}/ServiceRequest/{id}", HttpMethod.PUT, newRequest(requestBody), String.class, Map.of("partition", PARTITION, "id", "A001234234"));
 
 		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
 		assertThat(response.getBody()).isNotEqualTo(FHIR_SYNC_RESPONSE_BODY);
-		verify(exactly(0), anyRequestedFor(urlEqualTo(fhirSyncDraftPath)));
+		verify(exactly(0), anyRequestedFor(urlEqualTo(fhirSyncDraftEndpoint + "/" + PARTITION)));
 	}
 
 	@Test
 	public void otherResourcePostIsNotIntercepted() {
 		String requestBody = "{ \"resourceType\": \"Organization\" }";
 
-		ResponseEntity<String> response = this.restTemplate.exchange(LOCALHOST + localPort + "/fhir/Organization", HttpMethod.POST, newRequest(requestBody), String.class);
+		ResponseEntity<String> response = restTemplate.exchange(LOCALHOST + localPort + "/fhir/{partition}/Organization", HttpMethod.POST, newRequest(requestBody), String.class, PARTITION);
 
 		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
 		assertThat(response.getBody()).isNotEqualTo(FHIR_SYNC_RESPONSE_BODY);
-		verify(exactly(0), anyRequestedFor(urlEqualTo(fhirSyncDraftPath)));
+		verify(exactly(0), anyRequestedFor(urlEqualTo(fhirSyncDraftEndpoint + "/" + PARTITION)));
 	}
 
 	@Test
@@ -104,26 +107,44 @@ public class ServiceRequestInterceptionIT {
 				"\"resourceType\": \"Bundle\"," +
 				"\"type\": \"transaction\"," +
 				"\"entry\": [{" +
-					"\"resource\" : {" +
-						"\"resourceType\": \"ServiceRequest\"" +
-					"}," +
-					"\"request\" : {" +
-						"\"method\": \"POST\"," +
-						"\"url\": \"ServiceRequest\"" +
-					"}" +
+				"\"resource\" : {" +
+				"\"resourceType\": \"ServiceRequest\"" +
+				"}," +
+				"\"request\" : {" +
+				"\"method\": \"POST\"," +
+				"\"url\": \"ServiceRequest\"" +
+				"}" +
 				"}]" +
 			"}";
 
-		ResponseEntity<String> response = this.restTemplate.exchange(LOCALHOST + localPort + "/fhir", HttpMethod.POST, newRequest(requestBody), String.class);
+		ResponseEntity<String> response = restTemplate.exchange(LOCALHOST + localPort + "/fhir/{partition}", HttpMethod.POST, newRequest(requestBody), String.class, PARTITION);
 
 		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
 		assertThat(response.getBody()).isNotEqualTo(FHIR_SYNC_RESPONSE_BODY);
-		verify(exactly(0), anyRequestedFor(urlEqualTo(fhirSyncDraftPath)));
+		verify(exactly(0), anyRequestedFor(urlEqualTo(fhirSyncDraftEndpoint + "/" + PARTITION)));
+	}
+
+	private void createPartition(String partitionName) {
+		String requestBody =
+			"{" +
+				"\"resourceType\": \"Parameters\"," +
+				"\"parameter\": [ {" +
+				"\"name\": \"id\"," +
+				"\"valueInteger\": 1" +
+				"}, {" +
+				"\"name\": \"name\"," +
+				"\"valueCode\": \"" + partitionName + "\"" +
+				"}, {" +
+				"\"name\": \"description\"," +
+				"\"valueString\": \"partition\"" +
+				"} ]" +
+			"}";
+		restTemplate.exchange(LOCALHOST + localPort + "/fhir/root/$partition-management-create-partition", HttpMethod.POST, newRequest(requestBody), String.class);
 	}
 
 	private HttpEntity<String> newRequest(String body) {
 		HttpHeaders headers = new HttpHeaders();
-		headers.put("Content-Type", List.of("application/fhir+json"));
+		headers.put(HttpHeaders.CONTENT_TYPE, List.of(APPLICATION_FHIR_JSON));
 
 		return new HttpEntity<>(body, headers);
 	}
