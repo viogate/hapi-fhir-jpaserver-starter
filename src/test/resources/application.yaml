@@ -194,3 +194,6 @@ hapi:
 fhirSync:
   url: 'http://localhost:8080'
   draftEndpoint: '/internal/v1/draft'
+
+security:
+  secure: '/fhir/**'

@@ -54,6 +54,7 @@ import ca.uhn.fhir.rest.api.IResourceSupportedSvc;
 import ca.uhn.fhir.rest.openapi.OpenApiInterceptor;
 import ca.uhn.fhir.rest.server.*;
 import ca.uhn.fhir.rest.server.interceptor.*;
+import ca.uhn.fhir.rest.server.interceptor.consent.ConsentInterceptor;
 import ca.uhn.fhir.rest.server.interceptor.partition.RequestTenantPartitionInterceptor;
 import ca.uhn.fhir.rest.server.provider.ResourceProviderFactory;
 import ca.uhn.fhir.rest.server.tenant.UrlBaseTenantIdentificationStrategy;
@@ -274,6 +275,7 @@ public class StarterJpaConfig {
 		//TODO switch place to make test red
 		// Security check before the request interceptor
 		fhirServer.registerInterceptor(securityInterceptor);
+		fhirServer.registerInterceptor(new ConsentInterceptor(securityInterceptor));
 		fhirServer.registerInterceptor(serviceRequestInterceptor);
 
 		/*

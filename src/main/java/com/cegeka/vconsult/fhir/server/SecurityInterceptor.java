@@ -3,121 +3,115 @@ package com.cegeka.vconsult.fhir.server;
 import be.cegeka.vconsult.security.AuthorizationException;
 import be.cegeka.vconsult.security.api.Context;
 import be.cegeka.vconsult.security.api.ContextProvider;
-import be.cegeka.vconsult.security.spring.AuthorizationExceptionHandler;
-import ca.uhn.fhir.interceptor.api.Hook;
-import ca.uhn.fhir.interceptor.api.Pointcut;
-import ca.uhn.fhir.rest.api.server.ResponseDetails;
+import be.cegeka.vconsult.security.api.Verification;
+import ca.uhn.fhir.rest.api.server.RequestDetails;
 import ca.uhn.fhir.rest.server.exceptions.AuthenticationException;
+import ca.uhn.fhir.rest.server.interceptor.auth.AuthorizationInterceptor;
+import ca.uhn.fhir.rest.server.interceptor.auth.IAuthRule;
+import ca.uhn.fhir.rest.server.interceptor.auth.RuleBuilder;
+import ca.uhn.fhir.rest.server.interceptor.consent.ConsentOutcome;
+import ca.uhn.fhir.rest.server.interceptor.consent.IConsentContextServices;
+import ca.uhn.fhir.rest.server.interceptor.consent.IConsentService;
 import ca.uhn.fhir.rest.server.servlet.ServletRequestDetails;
 import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.hl7.fhir.r4.model.*;
+import org.jetbrains.annotations.NotNull;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+
+import java.util.List;
 
 import static be.cegeka.vconsult.security.api.Verification.*;
 
 @Component
-public class SecurityInterceptor {
-	@Autowired
-	private ContextProvider contextProvider;
-	@Autowired
-	private AuthorizationExceptionHandler authorizationExceptionHandler;
+public class SecurityInterceptor extends AuthorizationInterceptor implements IConsentService {
+	private static final Verification FHIR_ALL = anyPermission("FHIR_ALL");
 
-	@Hook(Pointcut.SERVER_INCOMING_REQUEST_POST_PROCESSED)
-	public void hook(ServletRequestDetails requestDetails) {
+	private final ContextProvider contextProvider;
+
+	public SecurityInterceptor(ContextProvider contextProvider) {
+		this.contextProvider = contextProvider;
+	}
+
+	@Override
+	public List<IAuthRule> buildRuleList(RequestDetails theRequestDetails) {
+		Context context = getContext( theRequestDetails);
+
+		if(context.matches(FHIR_ALL)) {
+			return new RuleBuilder()
+				.allowAll()
+				.build();
+		} else if(context.matches(anyDoctor())) {
+			return new RuleBuilder()
+				.allow().read().resourcesOfType(Organization.class).withAnyId().forTenantIds("root").andThen()
+				.allow().read().resourcesOfType(Practitioner.class).withAnyId().forTenantIds("root").andThen()
+				.denyAll()
+				.build();
+		} else {
+			return new RuleBuilder()
+				.denyAll()
+				.build();
+		}
+	}
+
+	@Override
+	public ConsentOutcome canSeeResource(RequestDetails theRequestDetails, IBaseResource theResource, IConsentContextServices theContextServices) {
+		Context context = getContext(theRequestDetails);
+		if(theResource instanceof Basic) {
+			return canSee(context, (Basic) theResource);
+		} else if(theResource instanceof Organization) {
+			return canSee(context, (Organization) theResource);
+		} else if(theResource instanceof Practitioner) {
+			return canSee(context, (Practitioner) theResource);
+		} else if(theResource instanceof CapabilityStatement || theResource instanceof Parameters) {
+			return ConsentOutcome.AUTHORIZED;
+		} else {
+			return ConsentOutcome.REJECT;
+		}
+	}
+
+	@NotNull
+	private static ConsentOutcome canSee(Context context, Basic basic) {
+		return verify(context, FHIR_ALL);
+	}
+
+	@NotNull
+	private static ConsentOutcome canSee(Context context, Organization organization) {
+		String masterId = organization.getIdentifier().stream()
+			.filter(i -> "http://viollier.ch/fhir/system/master-id".equals(i.getSystem()))
+			.map(Identifier::getValue)
+			.findFirst()
+			.orElseThrow(); //TODO
+
+		return verify(context, masterId(masterId).or(FHIR_ALL));
+	}
+
+	@NotNull
+	private static ConsentOutcome canSee(Context context, Practitioner practitioner) {
+		String archiveNumber = practitioner.getIdentifier().stream()
+			.filter(i -> "http://viollier.ch/fhir/system/archive-number".equals(i.getSystem()))
+			.map(Identifier::getValue)
+			.findFirst()
+			.orElseThrow(); //TODO
+
+		return verify(context, consultingDoctor(archiveNumber).or(prescribingDoctor(archiveNumber)).or(FHIR_ALL));
+	}
+
+	@NotNull
+	private static ConsentOutcome verify(Context context, Verification verification) {
+		if(context.matches(verification)) {
+			return ConsentOutcome.PROCEED;
+		} else {
+			return ConsentOutcome.REJECT;
+		}
+	}
+
+	private Context getContext(RequestDetails theRequestDetails) {
+		ServletRequestDetails servletRequestDetails = (ServletRequestDetails) theRequestDetails;
 		try {
-			early_hook_safe(requestDetails);
+			return contextProvider.getContext(servletRequestDetails.getServletRequest());
 		} catch (AuthorizationException e) {
-			try {
-				authorizationExceptionHandler.defaultErrorHandler(requestDetails.getServletRequest(), e);
-			} catch (Throwable ex) {
-				throw new AuthenticationException(e.getMessage(), ex);
-			}
-			throw new AuthenticationException(e.getMessage(), e);
-		}
-	}
-
-	private void early_hook_safe(ServletRequestDetails requestDetails) throws AuthorizationException {
-		String partition = requestDetails.getTenantId();
-
-		Context context = contextProvider.getContext(requestDetails.getServletRequest());
-
-		if(partition == null) {
-			throw new AuthenticationException("Unknown partition");
-		} else if("root".equals(partition)) {
-			// all good for now
-		} else if("DEFAULT".equals(partition)) {
-			// check special back-end stuff
-		} else if(partition.startsWith("D")) {
-			String doctorNumber = partition.substring(1);
-			context.verify(prescribingDoctor(doctorNumber).or(consultingDoctor(doctorNumber)).or(anyPermission("FHIR_ALL")));
-		} else {
-			throw new AuthenticationException("Unknown partition");
-		}
-	}
-
-	@Hook(Pointcut.SERVER_OUTGOING_RESPONSE)
-	public void late_hook(ServletRequestDetails request, ResponseDetails responseDetails) {
-		try {
-			IBaseResource modified = late_hook_safe(request, responseDetails.getResponseResource());
-			responseDetails.setResponseResource(modified);
-		} catch (AuthorizationException e) {
-			try {
-				authorizationExceptionHandler.defaultErrorHandler(request.getServletRequest(), e);
-			} catch (Throwable ex) {
-				throw new AuthenticationException(e.getMessage(), ex);
-			}
-			throw new AuthenticationException(e.getMessage(), e);
-		}
-	}
-
-	private IBaseResource late_hook_safe(ServletRequestDetails request, IBaseResource resource) throws AuthorizationException {
-		String partition = request.getTenantId();
-		Context context = contextProvider.getContext(request.getServletRequest());
-
-		if("root".equals(partition)) {
-			return checkResource(resource, null, context);
-		} else if("DEFAULT".equals(partition)) {
-			// no need to check stuff
-			return resource;
-		} else if(partition.startsWith("D")) {
-			String doctorNumber = partition.substring(1);
-			return checkResource(resource, doctorNumber, context);
-		} else {
-			throw new AuthenticationException("Unknown partition");
-		}
-	}
-
-	private IBaseResource checkResource(IBaseResource resource, String doctorNumber, Context context) throws AuthorizationException {
-		if(resource instanceof ServiceRequest) {
-			boolean canSeeServiceRequest = context.matches(prescribingDoctor(doctorNumber));
-			if (canSeeServiceRequest) {
-				return resource;
-			} else {
-				return new ServiceRequest(); // dummy
-			}
-		} else if(resource instanceof Organization) {
-			Organization organization = (Organization) resource;
-			// Bad way to do this
-			String masterId = organization.getIdentifier().get(0).getValue();
-			context.verify(masterId(masterId));
-			return resource;
-		} else if(resource instanceof Basic) {
-			// check that we are the backend
-			return resource;
-		} else if(resource instanceof Bundle) {
-			Bundle bundle = (Bundle) resource;
-			for (Bundle.BundleEntryComponent entry : bundle.getEntry()) {
-				Resource modified = (Resource)checkResource(entry.getResource(), doctorNumber, context);
-				entry.setResource(modified);
-			}
-			DomainResource basic = new Basic().addExtension(new Extension("http://daan.se", new StringType("aaa")));
-			Bundle.BundleEntryComponent t = new Bundle.BundleEntryComponent();
-			t.setResource(basic);
-			bundle.addEntry(t);
-			return bundle;
-		} else {
-			throw new AuthorizationException("Unsupported type " + resource.getClass().getSimpleName());
+			throw new AuthenticationException(e.getMessage());
 		}
 	}
 }
