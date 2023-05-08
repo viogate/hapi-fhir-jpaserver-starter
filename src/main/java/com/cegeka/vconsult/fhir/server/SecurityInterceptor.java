@@ -35,16 +35,18 @@ public class SecurityInterceptor extends AuthorizationInterceptor implements ICo
 
 	@Override
 	public List<IAuthRule> buildRuleList(RequestDetails theRequestDetails) {
-		Context context = getContext( theRequestDetails);
+		Context context = getContext(theRequestDetails);
 
-		if(context.matches(FHIR_ALL)) {
+		if (context.matches(FHIR_ALL)) {
 			return new RuleBuilder()
 				.allowAll()
 				.build();
-		} else if(context.matches(anyDoctor())) {
+		} else if (context.matches(anyDoctor())) {
 			return new RuleBuilder()
 				.allow().read().resourcesOfType(Organization.class).withAnyId().forTenantIds("root").andThen()
 				.allow().read().resourcesOfType(Practitioner.class).withAnyId().forTenantIds("root").andThen()
+				.allow().read().resourcesOfType(PractitionerRole.class).withAnyId().forTenantIds("root").andThen()
+				.allow().read().resourcesOfType(Endpoint.class).withAnyId().forTenantIds("root").andThen()
 				.denyAll()
 				.build();
 		} else {
@@ -57,26 +59,28 @@ public class SecurityInterceptor extends AuthorizationInterceptor implements ICo
 	@Override
 	public ConsentOutcome canSeeResource(RequestDetails theRequestDetails, IBaseResource theResource, IConsentContextServices theContextServices) {
 		Context context = getContext(theRequestDetails);
-		if(theResource instanceof Basic) {
+		if (theResource instanceof Basic) {
 			return canSee(context, (Basic) theResource);
-		} else if(theResource instanceof Organization) {
+		} else if (theResource instanceof Organization) {
 			return canSee(context, (Organization) theResource);
-		} else if(theResource instanceof Practitioner) {
+		} else if (theResource instanceof Practitioner) {
 			return canSee(context, (Practitioner) theResource);
-		} else if(theResource instanceof CapabilityStatement || theResource instanceof Parameters) {
+		} else if (theResource instanceof PractitionerRole) {
+			return canSee(context, (PractitionerRole) theResource);
+		} else if (theResource instanceof Endpoint) {
+			return canSee(context, (Endpoint) theResource);
+		} else if (theResource instanceof CapabilityStatement || theResource instanceof Parameters) {
 			return ConsentOutcome.AUTHORIZED;
 		} else {
 			return ConsentOutcome.REJECT;
 		}
 	}
 
-	@NotNull
-	private static ConsentOutcome canSee(Context context, Basic basic) {
+	private ConsentOutcome canSee(Context context, Basic basic) {
 		return verify(context, FHIR_ALL);
 	}
 
-	@NotNull
-	private static ConsentOutcome canSee(Context context, Organization organization) {
+	private ConsentOutcome canSee(Context context, Organization organization) {
 		String masterId = organization.getIdentifier().stream()
 			.filter(i -> "http://viollier.ch/fhir/system/master-id".equals(i.getSystem()))
 			.map(Identifier::getValue)
@@ -86,8 +90,7 @@ public class SecurityInterceptor extends AuthorizationInterceptor implements ICo
 		return verify(context, masterId(masterId).or(FHIR_ALL));
 	}
 
-	@NotNull
-	private static ConsentOutcome canSee(Context context, Practitioner practitioner) {
+	private ConsentOutcome canSee(Context context, Practitioner practitioner) {
 		String archiveNumber = practitioner.getIdentifier().stream()
 			.filter(i -> "http://viollier.ch/fhir/system/archive-number".equals(i.getSystem()))
 			.map(Identifier::getValue)
@@ -97,9 +100,36 @@ public class SecurityInterceptor extends AuthorizationInterceptor implements ICo
 		return verify(context, consultingDoctor(archiveNumber).or(prescribingDoctor(archiveNumber)).or(FHIR_ALL));
 	}
 
-	@NotNull
-	private static ConsentOutcome verify(Context context, Verification verification) {
-		if(context.matches(verification)) {
+	private ConsentOutcome canSee(Context context, PractitionerRole practitionerRole) {
+		String practitionerReference = practitionerRole
+			.getPractitioner()
+			.getReference();
+		String organizationReference = practitionerRole
+			.getOrganization()
+			.getReference();
+
+		String archiveNumberPractitioner = practitionerReference.substring(practitionerReference.indexOf("-") + 1);
+		String organizationId = organizationReference.substring(organizationReference.indexOf("-") + 1);
+
+		return verify(context,
+			consultingDoctor(archiveNumberPractitioner)
+				.or(prescribingDoctor(archiveNumberPractitioner))
+				.or(masterId(organizationId))
+				.or(FHIR_ALL));
+	}
+
+	private ConsentOutcome canSee(Context context, Endpoint endpoint) {
+		String address = endpoint.getAddress();
+		String archiveNumber = address.substring(address.lastIndexOf("/") + 2);
+
+		return verify(context,
+			consultingDoctor(archiveNumber)
+				.or(prescribingDoctor(archiveNumber))
+				.or(FHIR_ALL));
+	}
+
+	private ConsentOutcome verify(Context context, Verification verification) {
+		if (context.matches(verification)) {
 			return ConsentOutcome.PROCEED;
 		} else {
 			return ConsentOutcome.REJECT;
