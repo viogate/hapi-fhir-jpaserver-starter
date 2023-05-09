@@ -15,8 +15,6 @@ import ca.uhn.fhir.rest.server.interceptor.consent.IConsentService;
 import ca.uhn.fhir.rest.server.servlet.ServletRequestDetails;
 import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.hl7.fhir.r4.model.*;
-import org.jetbrains.annotations.NotNull;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -34,19 +32,26 @@ public class SecurityInterceptor extends AuthorizationInterceptor implements ICo
 	}
 
 	@Override
-	public List<IAuthRule> buildRuleList(RequestDetails theRequestDetails) {
-		Context context = getContext(theRequestDetails);
+	public List<IAuthRule> buildRuleList(RequestDetails requestDetails) {
+		Context context = getContext(requestDetails);
 
 		if (context.matches(FHIR_ALL)) {
 			return new RuleBuilder()
 				.allowAll()
 				.build();
 		} else if (context.matches(anyDoctor())) {
+			if (!allowedToSeePartition(requestDetails, context)) {
+				return new RuleBuilder()
+					.denyAll()
+					.build();
+			}
+
 			return new RuleBuilder()
+				//TODO type service request toelaten enkel create
 				.allow().read().resourcesOfType(Organization.class).withAnyId().forTenantIds("root").andThen()
-				.allow().read().resourcesOfType(Practitioner.class).withAnyId().forTenantIds("root").andThen()
 				.allow().read().resourcesOfType(PractitionerRole.class).withAnyId().forTenantIds("root").andThen()
 				.allow().read().resourcesOfType(Endpoint.class).withAnyId().forTenantIds("root").andThen()
+				.allow().read().resourcesOfType(Practitioner.class).withAnyId().andThen()
 				.denyAll()
 				.build();
 		} else {
@@ -56,9 +61,28 @@ public class SecurityInterceptor extends AuthorizationInterceptor implements ICo
 		}
 	}
 
+	private boolean allowedToSeePartition(RequestDetails requestDetails, Context context) {
+		String tenantId = requestDetails.getTenantId();
+		if (tenantId.equals("root")) {
+			return true;
+		}
+		if (!tenantId.contains("D")) {
+			return false;
+		}
+		String archiveNumber = tenantId.substring(tenantId.indexOf("D") + 1);
+		ConsentOutcome consentOutcome = verify(context, consultingDoctor(archiveNumber).or(prescribingDoctor(archiveNumber)));
+		if (consentOutcome == ConsentOutcome.REJECT) {
+			return false;
+		}
+
+		return true;
+	}
+
+
 	@Override
 	public ConsentOutcome canSeeResource(RequestDetails theRequestDetails, IBaseResource theResource, IConsentContextServices theContextServices) {
 		Context context = getContext(theRequestDetails);
+		//TODO canSee methode voor serviceRequest toevoegen
 		if (theResource instanceof Basic) {
 			return canSee(context, (Basic) theResource);
 		} else if (theResource instanceof Organization) {
