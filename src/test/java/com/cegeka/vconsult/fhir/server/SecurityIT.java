@@ -11,7 +11,6 @@ import ca.uhn.fhir.rest.client.interceptor.LoggingInterceptor;
 import ca.uhn.fhir.rest.server.exceptions.AuthenticationException;
 import ca.uhn.fhir.rest.server.exceptions.ForbiddenOperationException;
 import ca.uhn.fhir.rest.server.exceptions.ResourceNotFoundException;
-import com.cegeka.vconsult.fhir.server.order.ServiceRequestInterceptor;
 import com.github.tomakehurst.wiremock.junit5.WireMockTest;
 import org.hl7.fhir.instance.model.api.IAnyResource;
 import org.hl7.fhir.r4.model.*;
@@ -22,21 +21,17 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.web.server.LocalServerPort;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Primary;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
-import org.springframework.web.client.RestTemplate;
 
 import java.util.HashSet;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.mock;
 
 @ExtendWith(SpringExtension.class)
 @WireMockTest
-@SpringBootTest(classes = {Application.class}, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(classes = {Application.class, TestConfiguration.class}, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 public class SecurityIT {
 
 	@Autowired
@@ -46,24 +41,6 @@ public class SecurityIT {
 	private int port;
 
 	private final static FhirContext ctx = FhirContext.forR4();
-
-	//TODO service request
-	// - je mag niet in root: 1) getten(via id), 2) zoeken; omdat er geen instanties bestaan in root
-	// - doctor mag alleen post doen geen put; we ondersteunen enkel creatie, geen update
-//gebruik de mockContext (security context) om een request vanuit een bepaald type gebruiker te faken
-//				mockContext.setFailVerifyPrescribingDoctors(false); gebruiker valt onder de prescribing doctors die resource mogen zien
-//				mockContext.setFailVerifyMasterId(false); gebruiker heeft correcte master id die resource mag zien
-//				mockContext.setFailVerifyConsultingDoctors(false); gebruiker valt onder de consulting doctors die resource mogen zien
-
-
-	//TODO je zal de interceptor die je hebt geschreven moeten mocken:
-	class TestConfiguration {
-//		@Primary
-//		@Bean
-//		public ServiceRequestInterceptor serviceRequestInterceptor(RestTemplate restTemplate) {
-//			return new ServiceRequestInterceptor(restTemplate, "", "");
-//		}
-	}
 
 	@BeforeEach
 	void beforeEach() {
@@ -197,7 +174,7 @@ public class SecurityIT {
 		id.setValue(archiveNumber);
 		practitioner.addIdentifier(id);
 
-		String fullPractitionerId = getFullPractitionerId(archiveNumber);
+		String fullPractitionerId = getFullPractitionerId(partitionName, archiveNumber);
 		practitioner.setId(fullPractitionerId);
 
 		String idPart = getAuthenticatedClient(partitionName)
@@ -209,8 +186,8 @@ public class SecurityIT {
 		return idPart;
 	}
 
-	private String getFullPractitionerId(String practitionerIdPart) {
-		return String.format("Practitioner/%s-%s", "root", practitionerIdPart);
+	private String getFullPractitionerId(String partitionName, String practitionerIdPart) {
+		return String.format("Practitioner/%s-%s", partitionName, practitionerIdPart);
 	}
 
 	private org.hl7.fhir.r4.model.Practitioner getPractitioner(String partitionName, String id) {
@@ -244,7 +221,7 @@ public class SecurityIT {
 	private String createPractitionerRole(String partitionName, String organizationIdPart, String practitionerIdPart) {
 		org.hl7.fhir.r4.model.PractitionerRole practitionerRole = new org.hl7.fhir.r4.model.PractitionerRole();
 		String organizationId = getFullOrganizationId(partitionName, organizationIdPart);
-		String practitionerId = getFullPractitionerId(practitionerIdPart);
+		String practitionerId = getFullPractitionerId(partitionName, practitionerIdPart);
 		practitionerRole.setOrganization(new Reference(organizationId));
 		practitionerRole.setPractitioner(new Reference(practitionerId));
 
@@ -319,11 +296,18 @@ public class SecurityIT {
 			.execute();
 	}
 
-	private String createServiceRequest(String partitionName, String orderId) {
-		String endpointId = String.format("ServiceRequest/%s-%s", partitionName, orderId);
-		org.hl7.fhir.r4.model.ServiceRequest serviceRequest = new org.hl7.fhir.r4.model.ServiceRequest();
-		serviceRequest.setId(endpointId);
+	private String setupServiceRequest(String partitionName, String orderId) {
+		mockContext.setPermissions(Set.of("FHIR_ALL"));
 
+		String idPart = updateServiceRequest(partitionName, orderId);
+
+		resetMockContext();
+
+		return idPart;
+	}
+
+	private String createServiceRequest(String partitionName) {
+		org.hl7.fhir.r4.model.ServiceRequest serviceRequest = new org.hl7.fhir.r4.model.ServiceRequest();
 
 		return getAuthenticatedClient(partitionName)
 			.create()
@@ -331,6 +315,41 @@ public class SecurityIT {
 			.execute()
 			.getId()
 			.getIdPart();
+	}
+
+	private Bundle searchServiceRequest(String partitionName, String orderId) {
+		return getAuthenticatedClient(partitionName)
+			.<Bundle>search()
+			.forResource(org.hl7.fhir.r4.model.ServiceRequest.class)
+			.where(org.hl7.fhir.r4.model.ServiceRequest.IDENTIFIER.exactly().systemAndIdentifier("http://viollier.ch/fhir/system/order-number", orderId))
+			.cacheControl(CacheControlDirective.noCache())
+			.execute();
+	}
+
+	private String updateServiceRequest(String partitionName, String orderId) {
+		String serviceRequestFullId = String.format("ServiceRequest/%s-%s", partitionName, orderId);
+		ServiceRequest serviceRequest = new ServiceRequest();
+		serviceRequest.setId(serviceRequestFullId);
+		Identifier identifier = new Identifier();
+		identifier.setSystem("http://viollier.ch/fhir/system/order-number");
+		identifier.setValue(orderId);
+		serviceRequest.addIdentifier(identifier);
+
+		return getAuthenticatedClient(partitionName)
+			.update()
+			.resource(serviceRequest)
+			.execute()
+			.getId()
+			.getIdPart();
+	}
+
+	private org.hl7.fhir.r4.model.ServiceRequest getServiceRequest(String partitionName, String id) {
+		return getAuthenticatedClient(partitionName)
+			.read()
+			.resource(org.hl7.fhir.r4.model.ServiceRequest.class)
+			.withId(id)
+			.cacheControl(CacheControlDirective.noCache())
+			.execute();
 	}
 
 	@Nested
@@ -360,7 +379,7 @@ public class SecurityIT {
 		@Nested
 		class Basic {
 			@Test
-			void normalAccountsCanNotGetBasic() {
+			void normalAccountsCanNotGet() {
 				String id = setupBasic("Basic1");
 
 				mockContext.setFailVerifyMasterId(true);
@@ -371,7 +390,7 @@ public class SecurityIT {
 			}
 
 			@Test
-			void normalAccountsCanNotSearchBasic() {
+			void normalAccountsCanNotSearch() {
 				setupBasic("Basic2");
 
 				assertThatThrownBy(() -> {
@@ -380,7 +399,7 @@ public class SecurityIT {
 			}
 
 			@Test
-			void normalAccountsCanNotCreateBasic() {
+			void normalAccountsCanNotCreate() {
 				setupBasic("Basic4");
 
 				assertThatThrownBy(() -> {
@@ -389,7 +408,7 @@ public class SecurityIT {
 			}
 
 			@Test
-			void whenIHaveSpecialPermissions_thenICanSearchBasics() {
+			void iCanSearchWhenIHaveSpecialPermissions() {
 				setupBasic("Basic3");
 
 				mockContext.setPermissions(Set.of("FHIR_ALL"));
@@ -427,7 +446,7 @@ public class SecurityIT {
 		@Nested
 		class Organization {
 			@Test
-			void iCanGetMyOrganization() {
+			void iCanGet() {
 				String id = setUpOrganization(partitionName, "ME1");
 
 				org.hl7.fhir.r4.model.Organization organization = getOrganization(partitionName, id);
@@ -436,7 +455,7 @@ public class SecurityIT {
 			}
 
 			@Test
-			void iCanSearchMyOrganization() {
+			void iCanSearch() {
 				setUpOrganization(partitionName, "ME2");
 
 				Bundle execute = searchOrganization(partitionName, "ME2");
@@ -446,7 +465,7 @@ public class SecurityIT {
 			}
 
 			@Test
-			void iCanNotGetAnotherOrganization() {
+			void iCanNotGetAnother() {
 				String id = setUpOrganization(partitionName, "OTHER1");
 
 				mockContext.setFailVerifyMasterId(true);
@@ -457,7 +476,7 @@ public class SecurityIT {
 			}
 
 			@Test
-			void iCanNotSearchAnotherOrganization() {
+			void iCanNotSearchAnother() {
 				setUpOrganization(partitionName, "OTHER2");
 
 				mockContext.setFailVerifyMasterId(true);
@@ -467,14 +486,14 @@ public class SecurityIT {
 			}
 
 			@Test
-			void iCanNotCreateMyOrganization() {
+			void iCanNotCreate() {
 				assertThatThrownBy(() -> {
 					createOrganization(partitionName, "ME3");
 				}).isInstanceOfAny(ForbiddenOperationException.class);
 			}
 
 			@Test
-			void whenIHaveSpecialPermissions_thenICanSearchAnotherOrganization() {
+			void iCanSearchAnotherWhenIHaveSpecialPermissions() {
 				setUpOrganization(partitionName, "OTHER3");
 
 				mockContext.setFailVerifyMasterId(true);
@@ -534,7 +553,7 @@ public class SecurityIT {
 			}
 
 			@Test
-			void iCanNotGetAnotherPractitioner() {
+			void iCanNotGetAnother() {
 				String id = setupPractitioner(partitionName, "OTHER1");
 
 				mockContext.setFailVerifyConsultingDoctors(true);
@@ -546,7 +565,7 @@ public class SecurityIT {
 			}
 
 			@Test
-			void iCanNotSearchAnotherPractitioner() {
+			void iCanNotSearchAnother() {
 				setupPractitioner(partitionName, "OTHER2");
 
 				mockContext.setFailVerifyConsultingDoctors(true);
@@ -557,14 +576,14 @@ public class SecurityIT {
 			}
 
 			@Test
-			void iCanNotCreateMyDoctor() {
+			void iCanNotCreate() {
 				assertThatThrownBy(() -> {
 					createPractitioner(partitionName, "C3");
 				}).isInstanceOfAny(ForbiddenOperationException.class);
 			}
 
 			@Test
-			void whenIHaveSpecialPermissions_thenICanSearchAnotherOrganization() {
+			void iCanSearchAnotherOrganizationWhenIHaveSpecialPermissions() {
 				setupPractitioner(partitionName, "OTHER3");
 
 				mockContext.setFailVerifyConsultingDoctors(true);
@@ -579,7 +598,7 @@ public class SecurityIT {
 		@Nested
 		class PractitionerRole {
 			@Test
-			void asAPrescribingDoctorICanGetMyLinkToMyOrganization() {
+			void asAPrescribingDoctorICanGet() {
 				setUpOrganization(partitionName, "account1");
 				setupPractitioner(partitionName, "57761");
 				String practitionerRoleId = setupPractitionerRole(partitionName, "account1", "57761");
@@ -593,7 +612,7 @@ public class SecurityIT {
 			}
 
 			@Test
-			void asAConsultingDoctorICanGetMyLinkToMyOrganization() {
+			void asAConsultingDoctorICanGet() {
 				setUpOrganization(partitionName, "account1");
 				setupPractitioner(partitionName, "57761");
 				String practitionerRoleId = setupPractitionerRole(partitionName, "account1", "57761");
@@ -607,7 +626,7 @@ public class SecurityIT {
 			}
 
 			@Test
-			void asAnOrganizationICanGetMyLinkToMyDoctors() {
+			void asAnOrganizationICanGet() {
 				setUpOrganization(partitionName, "account1");
 				setupPractitioner(partitionName, "57761");
 				String practitionerRoleId = setupPractitionerRole(partitionName, "account1", "57761");
@@ -621,7 +640,7 @@ public class SecurityIT {
 			}
 
 			@Test
-			void asAPrescribingDoctorICanSearchMyLinkToMyOrganization() {
+			void asAPrescribingDoctorICanSearch() {
 				setUpOrganization(partitionName, "account1");
 				setupPractitioner(partitionName, "57761");
 				setupPractitionerRole(partitionName, "account1", "57761");
@@ -636,7 +655,7 @@ public class SecurityIT {
 			}
 
 			@Test
-			void asAConsultingDoctorICanSearchMyLinkToMyOrganization() {
+			void asAConsultingDoctorICanSearch() {
 				setUpOrganization(partitionName, "account1");
 				setupPractitioner(partitionName, "57761");
 				setupPractitionerRole(partitionName, "account1", "57761");
@@ -651,7 +670,7 @@ public class SecurityIT {
 			}
 
 			@Test
-			void asAnOrganizationICanSearchMyLinkToMyDoctors() {
+			void asAnOrganizationICanSearch() {
 				setUpOrganization(partitionName, "account1");
 				setupPractitioner(partitionName, "57761");
 				setupPractitionerRole(partitionName, "account1", "57761");
@@ -666,7 +685,7 @@ public class SecurityIT {
 			}
 
 			@Test
-			void iCannotGetADoctorOrganisationLinkOfAnotherDoctorOrAnotherOrganisation() {
+			void iCannotGetAnother() {
 				setUpOrganization(partitionName, "account1");
 				setupPractitioner(partitionName, "57761");
 				String practitionerRoleId = setupPractitionerRole(partitionName, "account1", "57761");
@@ -682,7 +701,7 @@ public class SecurityIT {
 
 
 			@Test
-			void iCannotSearchADoctorOrganisationLinkOfAnotherDoctorOrAnotherOrganisation() {
+			void iCannotSearchAnother() {
 				setUpOrganization(partitionName, "account1");
 				setupPractitioner(partitionName, "57761");
 				setupPractitionerRole(partitionName, "account1", "57761");
@@ -697,7 +716,7 @@ public class SecurityIT {
 			}
 
 			@Test
-			void iCannotCreateADoctorOrganizationLink() {
+			void iCannotCreate() {
 				setUpOrganization(partitionName, "account1");
 				setupPractitioner(partitionName, "57761");
 
@@ -707,7 +726,7 @@ public class SecurityIT {
 			}
 
 			@Test
-			void whenIHaveSpecialPermissions_thenICanSearchAnotherPractitionerRole() {
+			void iCanSearchAnotherPractitionerRoleWhenIHaveSpecialPermissions() {
 				setUpOrganization(partitionName, "account1");
 				setupPractitioner(partitionName, "57761");
 				setupPractitionerRole(partitionName, "account1", "57761");
@@ -726,7 +745,7 @@ public class SecurityIT {
 		class Endpoint {
 
 			@Test
-			void asAPrescribingDoctorICanGetMyEndpoint() {
+			void asAPrescribingDoctorICanGet() {
 				String endpointId = setupEndpoint(partitionName, "account1", "57761");
 
 				mockContext.setFailVerifyConsultingDoctors(true);
@@ -737,7 +756,7 @@ public class SecurityIT {
 			}
 
 			@Test
-			void asAConsultingDoctorICanGetMyEndpoint() {
+			void asAConsultingDoctorICanGet() {
 				String endpointId = setupEndpoint(partitionName, "account1", "57761");
 
 				mockContext.setFailVerifyPrescribingDoctors(true);
@@ -748,7 +767,41 @@ public class SecurityIT {
 			}
 
 			@Test
-			void iCannotGetAnEndpointBelongingToAnotherDoctor() {
+			void asAPrescribingDoctorICanSearch() {
+				String endpointId = setupEndpoint(partitionName, "account1", "57761");
+
+				mockContext.setFailVerifyConsultingDoctors(true);
+
+				Bundle bundle = searchEndpoint(partitionName, endpointId);
+
+				assertThat(bundle.getEntry()).hasSize(1);
+			}
+
+			@Test
+			void asAConsultingDoctorICanSearch() {
+				String endpointId = setupEndpoint(partitionName, "account1", "57761");
+
+				mockContext.setFailVerifyPrescribingDoctors(true);
+
+				Bundle bundle = searchEndpoint(partitionName, endpointId);
+
+				assertThat(bundle.getEntry()).hasSize(1);
+			}
+
+			@Test
+			void iCannotGetAnother() {
+				String endpointId = setupEndpoint(partitionName, "account1", "57761");
+
+				mockContext.setFailVerifyConsultingDoctors(true);
+				mockContext.setFailVerifyPrescribingDoctors(true);
+
+				assertThatThrownBy(() -> {
+					getEndpoint(partitionName, endpointId);
+				}).isInstanceOfAny(ResourceNotFoundException.class);
+			}
+
+			@Test
+			void iCannotSearchAnother() {
 				String endpointId = setupEndpoint(partitionName, "account1", "57761");
 
 				mockContext.setFailVerifyConsultingDoctors(true);
@@ -770,10 +823,25 @@ public class SecurityIT {
 		@Nested
 		class ServiceRequest {
 			@Test
-			void iCannotCreateAServiceRequestSinceTheyShouldNotExistInRootPartition() {
-				//TODO you can continue this...
+			void iCannotCreateSinceResourceShouldNotExistInThisPartition() {
 				assertThatThrownBy(() -> {
-					createServiceRequest(partitionName, "001345453");
+					createServiceRequest(partitionName);
+				}).isInstanceOfAny(ForbiddenOperationException.class);
+			}
+
+			@Test
+			void iCannotGetSinceResourceShouldNotExistInThisPartition() {
+				String serviceRequestId = setupServiceRequest(partitionName, "123");
+				assertThatThrownBy(() -> {
+					getServiceRequest(partitionName, serviceRequestId);
+				}).isInstanceOfAny(ForbiddenOperationException.class);
+			}
+
+			@Test
+			void iCannotSearchSinceResourceShouldNotExistInThisPartition() {
+				setupServiceRequest(partitionName, "123");
+				assertThatThrownBy(() -> {
+					searchServiceRequest(partitionName, "123");
 				}).isInstanceOfAny(ForbiddenOperationException.class);
 			}
 		}
@@ -786,7 +854,7 @@ public class SecurityIT {
 		@Nested
 		class Basic {
 			@Test
-			void normalAccountsCanNotGetBasic() {
+			void iCanNotGet() {
 				String id = setupBasic("Basic1");
 
 				mockContext.setFailVerifyMasterId(true);
@@ -797,7 +865,7 @@ public class SecurityIT {
 			}
 
 			@Test
-			void normalAccountsCanNotSearchBasic() {
+			void iCanNotSearch() {
 				setupBasic("Basic2");
 
 				assertThatThrownBy(() -> {
@@ -806,7 +874,7 @@ public class SecurityIT {
 			}
 
 			@Test
-			void normalAccountsCanNotCreateBasic() {
+			void iCanNotCreate() {
 				setupBasic("Basic4");
 
 				assertThatThrownBy(() -> {
@@ -815,7 +883,7 @@ public class SecurityIT {
 			}
 
 			@Test
-			void whenIHaveSpecialPermissions_thenICanSearchBasics() {
+			void iCanSearchWhenIHaveSpecialPermissions() {
 				setupBasic("Basic3");
 
 				mockContext.setPermissions(Set.of("FHIR_ALL"));
@@ -838,7 +906,7 @@ public class SecurityIT {
 		@Nested
 		class Organization {
 			@Test
-			void iCannotGetMyOrganizationSinceItDoesNotExistInDoctorPartitions() {
+			void iCannotGetSinceResourceShouldNotExistInThisPartition() {
 				String id = setUpOrganization(defaultDoctorPartitionName, "ME1");
 
 				assertThatThrownBy(() -> {
@@ -847,7 +915,7 @@ public class SecurityIT {
 			}
 
 			@Test
-			void iCannotSearchMyOrganizationSinceItDoesNotExistInDoctorPartitions() {
+			void iCannotSearchSinceResourceShouldNotExistInThisPartition() {
 				setUpOrganization(defaultDoctorPartitionName, "ME2");
 
 				assertThatThrownBy(() -> {
@@ -856,14 +924,14 @@ public class SecurityIT {
 			}
 
 			@Test
-			void iCanNotCreateMyOrganization() {
+			void iCanNotCreateMyOrganizationSinceResourceShouldNotExistInThisPartition() {
 				assertThatThrownBy(() -> {
 					createOrganization(defaultDoctorPartitionName, "ME3");
 				}).isInstanceOfAny(ForbiddenOperationException.class);
 			}
 
 			@Test
-			void whenIHaveSpecialPermissions_thenICanSearchAnotherOrganization() {
+			void iCanSearchAnotherOrganizationWhenIHaveSpecialPermissions() {
 				setUpOrganization(defaultDoctorPartitionName, "OTHER3");
 
 				mockContext.setFailVerifyMasterId(true);
@@ -874,7 +942,7 @@ public class SecurityIT {
 			}
 
 			@Test
-			void whenIHaveSpecialPermissions_thenICanSearchAnOrganizationOfAnotherPartition() {
+			void iCanSearchAnOrganizationOfAnotherPartitionWhenIHaveSpecialPermissions_() {
 				setUpOrganization(defaultDoctorPartitionName, "ME3");
 				setUpOrganization("D666", "ME3");
 
@@ -938,7 +1006,7 @@ public class SecurityIT {
 
 
 			@Test
-			void iCanNotGetAnotherPractitioner() {
+			void iCanNotGetAnother() {
 				String id = setupPractitioner(defaultDoctorPartitionName, "OTHER1");
 
 				mockContext.setFailVerifyConsultingDoctors(true);
@@ -950,14 +1018,14 @@ public class SecurityIT {
 			}
 
 			@Test
-			void iCanNotCreateMyDoctor() {
+			void iCanNotCreate() {
 				assertThatThrownBy(() -> {
 					createPractitioner(defaultDoctorPartitionName, "C3");
 				}).isInstanceOfAny(ForbiddenOperationException.class);
 			}
 
 			@Test
-			void whenIHaveSpecialPermissions_thenICanSearchAnotherOrganization() {
+			void iCanSearchAnotherOrganizationWhenIHaveSpecialPermissions() {
 				setupPractitioner(defaultDoctorPartitionName, "OTHER3");
 
 				mockContext.setFailVerifyConsultingDoctors(true);
@@ -972,7 +1040,7 @@ public class SecurityIT {
 		@Nested
 		class PractitionerRole {
 			@Test
-			void iCannotGetMyLinkToMyOrganizationSinceItDoesNotExistInDoctorPartitions() {
+			void iCannotGetSinceResourceShouldNotExistInThisPartition() {
 				setUpOrganization(defaultDoctorPartitionName, "account1");
 				setupPractitioner(defaultDoctorPartitionName, "57761");
 				String practitionerRoleId = setupPractitionerRole(defaultDoctorPartitionName, "account1", "57761");
@@ -983,7 +1051,7 @@ public class SecurityIT {
 			}
 
 			@Test
-			void iCannotSearchMyLinkToMyOrganizationSinceItDoesNotExistInDoctorPartitions() {
+			void iCannotSearchSinceResourceShouldNotExistInThisPartition() {
 				setUpOrganization(defaultDoctorPartitionName, "account1");
 				setupPractitioner(defaultDoctorPartitionName, "57761");
 				setupPractitionerRole(defaultDoctorPartitionName, "account1", "57761");
@@ -994,35 +1062,7 @@ public class SecurityIT {
 			}
 
 			@Test
-			void iCannotSearchADoctorOrganizationLinkInAnotherPartition() {
-				setUpOrganization(defaultDoctorPartitionName, "account1");
-				setupPractitioner(defaultDoctorPartitionName, "57761");
-				setupPractitionerRole(defaultDoctorPartitionName, "account1", "57761");
-
-				mockContext.setFailVerifyConsultingDoctors(true);
-				mockContext.setFailVerifyPrescribingDoctors(true);
-
-				assertThatThrownBy(() -> {
-					searchPractitionerRole("D666", "account1", "57761");
-				}).isInstanceOfAny(ForbiddenOperationException.class);
-			}
-
-			@Test
-			void iCannotGetADoctorOrganizationLinkInAnotherPartition() {
-				setUpOrganization(defaultDoctorPartitionName, "account1");
-				setupPractitioner(defaultDoctorPartitionName, "57761");
-				String practitionerRoleId = setupPractitionerRole(defaultDoctorPartitionName, "account1", "57761");
-
-				mockContext.setFailVerifyPrescribingDoctors(true);
-				mockContext.setFailVerifyConsultingDoctors(true);
-
-				assertThatThrownBy(() -> {
-					getPractitionerRole("D666", practitionerRoleId);
-				}).isInstanceOfAny(ForbiddenOperationException.class);
-			}
-
-			@Test
-			void iCannotCreateADoctorOrganizationLink() {
+			void iCannotCreate() {
 				setUpOrganization(defaultDoctorPartitionName, "account1");
 				setupPractitioner(defaultDoctorPartitionName, "57761");
 
@@ -1032,7 +1072,7 @@ public class SecurityIT {
 			}
 
 			@Test
-			void whenIHaveSpecialPermissions_thenICanSearchAnotherPractitionerRole() {
+			void iCanSearchAnotherPractitionerRoleWhenIHaveSpecialPermissions_() {
 				setUpOrganization(defaultDoctorPartitionName, "account1");
 				setupPractitioner(defaultDoctorPartitionName, "57761");
 				setupPractitionerRole(defaultDoctorPartitionName, "account1", "57761");
@@ -1050,7 +1090,7 @@ public class SecurityIT {
 		@Nested
 		class Endpoint {
 			@Test
-			void iCannotSearchMyEndpointSinceItDoesNotExistInDoctorPartitions() {
+			void iCannotSearchSinceResourceShouldNotExistInThisPartition() {
 				String endpointId = setupEndpoint(defaultDoctorPartitionName, "account1", "57761");
 
 				mockContext.setFailVerifyConsultingDoctors(true);
@@ -1062,7 +1102,7 @@ public class SecurityIT {
 			}
 
 			@Test
-			void iCannotGetMyEndpointSinceItDoesNotExistInDoctorPartitions() {
+			void iCannotGetSinceResourceShouldNotExistInThisPartition() {
 				String endpointId = setupEndpoint(defaultDoctorPartitionName, "account1", "57761");
 
 				mockContext.setFailVerifyConsultingDoctors(true);
@@ -1073,23 +1113,66 @@ public class SecurityIT {
 			}
 
 			@Test
-			void iCannotGetAnEndpointBelongingToAnotherPartition() {
-				String endpointId = setupEndpoint(defaultDoctorPartitionName, "account1", "57761");
+			void iCannotCreateSinceResourceShouldNotExistInThisPartition() {
+				assertThatThrownBy(() -> {
+					createEndpoint(defaultDoctorPartitionName, "account1", "57761");
+				}).isInstanceOfAny(ForbiddenOperationException.class);
+			}
+		}
+
+		@Nested
+		class ServiceRequest {
+			@Test
+			void iCanCreate() {
+				String serviceRequestId = createServiceRequest(defaultDoctorPartitionName);
+				assertThat(serviceRequestId).isNotNull();
+			}
+
+			@Test
+			void iCannotUpdate() {
+				assertThatThrownBy(() -> {
+					updateServiceRequest(defaultDoctorPartitionName, "123");
+				}).isInstanceOfAny(ForbiddenOperationException.class);
+			}
+
+			@Test
+			void iCanSearch() {
+				setupServiceRequest(defaultDoctorPartitionName, "123");
+				Bundle bundle = searchServiceRequest(defaultDoctorPartitionName, "123");
+				assertThat(bundle.getEntry()).hasSize(1);
+			}
+
+			@Test
+			void iCanGet() {
+				String serviceRequestId = setupServiceRequest(defaultDoctorPartitionName, "123");
+				org.hl7.fhir.r4.model.ServiceRequest serviceRequest = getServiceRequest(defaultDoctorPartitionName, serviceRequestId);
+				assertThat(serviceRequest).isNotNull();
+			}
+
+			@Test
+			void iCannotGetAnother() {
+				String serviceRequestId = setupServiceRequest(defaultDoctorPartitionName, "123");
 
 				mockContext.setFailVerifyConsultingDoctors(true);
 				mockContext.setFailVerifyPrescribingDoctors(true);
 
 				assertThatThrownBy(() -> {
-					getEndpoint(defaultDoctorPartitionName, endpointId);
+					getServiceRequest(defaultDoctorPartitionName, serviceRequestId);
 				}).isInstanceOfAny(ForbiddenOperationException.class);
 			}
 
 			@Test
-			void iCannotCreateAnEndpoint() {
+			void iCannotSearchAnother() {
+				setupServiceRequest(defaultDoctorPartitionName, "123");
+
+				mockContext.setFailVerifyConsultingDoctors(true);
+				mockContext.setFailVerifyPrescribingDoctors(true);
+
 				assertThatThrownBy(() -> {
-					createEndpoint(defaultDoctorPartitionName, "account1", "57761");
+					searchServiceRequest(defaultDoctorPartitionName, "123");
 				}).isInstanceOfAny(ForbiddenOperationException.class);
 			}
+
 		}
 	}
 

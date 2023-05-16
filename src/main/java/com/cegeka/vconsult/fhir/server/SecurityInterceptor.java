@@ -40,18 +40,19 @@ public class SecurityInterceptor extends AuthorizationInterceptor implements ICo
 				.allowAll()
 				.build();
 		} else if (context.matches(anyDoctor())) {
-			if (!allowedToSeePartition(requestDetails, context)) {
+			if (!isAllowedToSeePartition(requestDetails, context)) {
 				return new RuleBuilder()
 					.denyAll()
 					.build();
 			}
 
 			return new RuleBuilder()
-				//TODO type service request toelaten enkel create
 				.allow().read().resourcesOfType(Organization.class).withAnyId().forTenantIds("root").andThen()
 				.allow().read().resourcesOfType(PractitionerRole.class).withAnyId().forTenantIds("root").andThen()
 				.allow().read().resourcesOfType(Endpoint.class).withAnyId().forTenantIds("root").andThen()
 				.allow().read().resourcesOfType(Practitioner.class).withAnyId().andThen()
+				.allow().read().resourcesOfType(ServiceRequest.class).withAnyId().notForTenantIds("root").andThen()
+				.allow().create().resourcesOfType(ServiceRequest.class).withAnyId().notForTenantIds("root").andThen()
 				.denyAll()
 				.build();
 		} else {
@@ -61,7 +62,7 @@ public class SecurityInterceptor extends AuthorizationInterceptor implements ICo
 		}
 	}
 
-	private boolean allowedToSeePartition(RequestDetails requestDetails, Context context) {
+	private boolean isAllowedToSeePartition(RequestDetails requestDetails, Context context) {
 		String tenantId = requestDetails.getTenantId();
 		if (tenantId.equals("root")) {
 			return true;
@@ -82,9 +83,16 @@ public class SecurityInterceptor extends AuthorizationInterceptor implements ICo
 	@Override
 	public ConsentOutcome canSeeResource(RequestDetails theRequestDetails, IBaseResource theResource, IConsentContextServices theContextServices) {
 		Context context = getContext(theRequestDetails);
-		//TODO canSee methode voor serviceRequest toevoegen
+		if (resourceTypeOnlyPresentInPrivateDoctorPartition(theResource)) {
+			return ConsentOutcome.PROCEED;
+		}
+
+		return isResourceVisibleForRequester(theResource, context);
+	}
+
+	private ConsentOutcome isResourceVisibleForRequester(IBaseResource theResource, Context context) {
 		if (theResource instanceof Basic) {
-			return canSee(context, (Basic) theResource);
+			return canSee(context);
 		} else if (theResource instanceof Organization) {
 			return canSee(context, (Organization) theResource);
 		} else if (theResource instanceof Practitioner) {
@@ -100,7 +108,15 @@ public class SecurityInterceptor extends AuthorizationInterceptor implements ICo
 		}
 	}
 
-	private ConsentOutcome canSee(Context context, Basic basic) {
+	private boolean resourceTypeOnlyPresentInPrivateDoctorPartition(IBaseResource theResource) {
+		if (theResource instanceof ServiceRequest) {
+			return true;
+		}
+
+		return false;
+	}
+
+	private ConsentOutcome canSee(Context context) {
 		return verify(context, FHIR_ALL);
 	}
 
