@@ -34,7 +34,6 @@ public class SecurityInterceptor extends AuthorizationInterceptor implements ICo
 	@Override
 	public List<IAuthRule> buildRuleList(RequestDetails requestDetails) {
 		Context context = getContext(requestDetails);
-
 		if (context.matches(FHIR_ALL)) {
 			return new RuleBuilder()
 				.allowAll()
