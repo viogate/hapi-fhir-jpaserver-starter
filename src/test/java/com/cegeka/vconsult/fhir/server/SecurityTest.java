@@ -127,6 +127,16 @@ public class SecurityTest {
 		return id;
 	}
 
+	private String setUpOrganizationWithName(String partitionName, String name) {
+		mockContext.setPermissions(Set.of("FHIR_ALL"));
+
+		String id = createOrganizationWithName(partitionName, name);
+
+		resetMockContext();
+
+		return id;
+	}
+
 	private String createOrganization(String partitionName, String masterId) {
 		org.hl7.fhir.r4.model.Organization organization = new org.hl7.fhir.r4.model.Organization();
 		Identifier id = new Identifier();
@@ -135,6 +145,20 @@ public class SecurityTest {
 		organization.addIdentifier(id);
 		String organizationId = getFullOrganizationId(partitionName, masterId);
 		organization.setId(organizationId);
+
+		return getAuthenticatedClient(partitionName)
+			.update()
+			.resource(organization)
+			.execute()
+			.getId()
+			.getIdPart();
+	}
+
+	private String createOrganizationWithName(String partitionName, String name) {
+		org.hl7.fhir.r4.model.Organization organization = new org.hl7.fhir.r4.model.Organization();
+		String organizationId = getFullOrganizationId(partitionName, "test");
+		organization.setId(organizationId);
+		organization.setName(name);
 
 		return getAuthenticatedClient(partitionName)
 			.update()
@@ -157,10 +181,29 @@ public class SecurityTest {
 			.execute();
 	}
 
+	private Bundle searchOrganizationForName(String partitionName, String name) {
+		return getAuthenticatedClient(partitionName)
+			.<Bundle>search()
+			.forResource(org.hl7.fhir.r4.model.Organization.class)
+			.where(org.hl7.fhir.r4.model.Organization.NAME.matchesExactly().value(name))
+			.cacheControl(CacheControlDirective.noCache())
+			.execute();
+	}
+
 	private String setupPractitioner(String partitionName, String archiveNumber) {
 		mockContext.setPermissions(Set.of("FHIR_ALL"));
 
 		String idPart = createPractitioner(partitionName, archiveNumber);
+
+		resetMockContext();
+
+		return idPart;
+	}
+
+	private String setupPractitionerWithGLNNumber(String partitionName, String glnNumber) {
+		mockContext.setPermissions(Set.of("FHIR_ALL"));
+
+		String idPart = createPractitionerWithGlnNumber(partitionName, glnNumber);
 
 		resetMockContext();
 
@@ -177,17 +220,34 @@ public class SecurityTest {
 		String fullPractitionerId = getFullPractitionerId(partitionName, archiveNumber);
 		practitioner.setId(fullPractitionerId);
 
-		String idPart = getAuthenticatedClient(partitionName)
+		return getAuthenticatedClient(partitionName)
 			.update()
 			.resource(practitioner)
 			.execute()
 			.getId()
 			.getIdPart();
-		return idPart;
 	}
 
 	private String getFullPractitionerId(String partitionName, String practitionerIdPart) {
 		return String.format("Practitioner/%s-%s", partitionName, practitionerIdPart);
+	}
+
+	private String createPractitionerWithGlnNumber(String partitionName, String glnNumber) {
+		org.hl7.fhir.r4.model.Practitioner practitioner = new org.hl7.fhir.r4.model.Practitioner();
+		Identifier id = new Identifier();
+		id.setSystem("urn:oid:2.16.756.5.30.1.123.100.2.1.1");
+		id.setValue(glnNumber);
+		practitioner.addIdentifier(id);
+
+		String fullPractitionerId = getFullPractitionerId(partitionName, "test");
+		practitioner.setId(fullPractitionerId);
+
+		return getAuthenticatedClient(partitionName)
+			.update()
+			.resource(practitioner)
+			.execute()
+			.getId()
+			.getIdPart();
 	}
 
 	private org.hl7.fhir.r4.model.Practitioner getPractitioner(String partitionName, String id) {
@@ -204,6 +264,15 @@ public class SecurityTest {
 			.<Bundle>search()
 			.forResource(org.hl7.fhir.r4.model.Practitioner.class)
 			.where(org.hl7.fhir.r4.model.Practitioner.IDENTIFIER.exactly().systemAndIdentifier("http://viollier.ch/fhir/system/archive-number", masterId))
+			.cacheControl(CacheControlDirective.noCache())
+			.execute();
+	}
+
+	private Bundle searchPractitionerForGlnNumber(String partitionName, String glnNumber) {
+		return getAuthenticatedClient(partitionName)
+			.<Bundle>search()
+			.forResource(org.hl7.fhir.r4.model.Practitioner.class)
+			.where(org.hl7.fhir.r4.model.Practitioner.IDENTIFIER.exactly().systemAndIdentifier("urn:oid:2.16.756.5.30.1.123.100.2.1.1", glnNumber))
 			.cacheControl(CacheControlDirective.noCache())
 			.execute();
 	}
@@ -225,13 +294,12 @@ public class SecurityTest {
 		practitionerRole.setOrganization(new Reference(organizationId));
 		practitionerRole.setPractitioner(new Reference(practitionerId));
 
-		String idPart = getAuthenticatedClient(partitionName)
+		return getAuthenticatedClient(partitionName)
 			.create()
 			.resource(practitionerRole)
 			.execute()
 			.getId()
 			.getIdPart();
-		return idPart;
 	}
 
 	private org.hl7.fhir.r4.model.PractitionerRole getPractitionerRole(String partitionName, String id) {
@@ -486,6 +554,16 @@ public class SecurityTest {
 			}
 
 			@Test
+			void ifISearchForAnOrganizationWithoutMasterIdItGivesNoResults() {
+				setUpOrganizationWithName(partitionName, "organization name");
+
+				mockContext.setFailVerifyMasterId(true);
+
+				Bundle actual = searchOrganizationForName(partitionName, "organization name");
+				assertThat(actual.getEntry()).isEmpty();
+			}
+
+			@Test
 			void iCanNotCreate() {
 				assertThatThrownBy(() -> {
 					createOrganization(partitionName, "ME3");
@@ -550,6 +628,17 @@ public class SecurityTest {
 
 				Resource resource = execute.getEntryFirstRep().getResource();
 				assertThat(resource).isInstanceOf(org.hl7.fhir.r4.model.Practitioner.class);
+			}
+
+			@Test
+			void ifISearchForAPractitionerWithoutArchiveNumberItGivesNoResults() {
+				setupPractitionerWithGLNNumber(partitionName, "G234534");
+
+				mockContext.setFailVerifyPrescribingDoctors(true);
+
+				Bundle bundle = searchPractitionerForGlnNumber(partitionName, "C2");
+
+				assertThat(bundle.getEntry()).isEmpty();
 			}
 
 			@Test

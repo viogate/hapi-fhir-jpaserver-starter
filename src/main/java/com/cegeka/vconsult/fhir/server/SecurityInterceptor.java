@@ -13,8 +13,10 @@ import ca.uhn.fhir.rest.server.interceptor.consent.ConsentOutcome;
 import ca.uhn.fhir.rest.server.interceptor.consent.IConsentContextServices;
 import ca.uhn.fhir.rest.server.interceptor.consent.IConsentService;
 import ca.uhn.fhir.rest.server.servlet.ServletRequestDetails;
+import org.apache.commons.lang3.StringUtils;
 import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.hl7.fhir.r4.model.*;
+import org.slf4j.Logger;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -23,6 +25,7 @@ import static be.cegeka.vconsult.security.api.Verification.*;
 
 @Component
 public class SecurityInterceptor extends AuthorizationInterceptor implements IConsentService {
+	private static final Logger LOGGER = org.slf4j.LoggerFactory.getLogger(SecurityInterceptor.class);
 	private static final Verification FHIR_ALL = anyPermission("FHIR_ALL");
 
 	private final ContextProvider contextProvider;
@@ -124,8 +127,10 @@ public class SecurityInterceptor extends AuthorizationInterceptor implements ICo
 			.filter(i -> "http://viollier.ch/fhir/system/master-id".equals(i.getSystem()))
 			.map(Identifier::getValue)
 			.findFirst()
-			.orElseThrow(); //TODO
-
+			.orElse(null);
+		if (StringUtils.isBlank(masterId)) {
+			LOGGER.warn("Organization with resource id {} does not have master id", organization.getId());
+		}
 		return verify(context, masterId(masterId).or(FHIR_ALL));
 	}
 
@@ -134,18 +139,20 @@ public class SecurityInterceptor extends AuthorizationInterceptor implements ICo
 			.filter(i -> "http://viollier.ch/fhir/system/archive-number".equals(i.getSystem()))
 			.map(Identifier::getValue)
 			.findFirst()
-			.orElseThrow(); //TODO
+			.orElse(null);
+		if (StringUtils.isBlank(archiveNumber)) {
+			LOGGER.warn("Practitioner with resource id {} does not have an archive number", practitioner.getId());
+		}
 
 		return verify(context, consultingDoctor(archiveNumber).or(prescribingDoctor(archiveNumber)).or(FHIR_ALL));
 	}
 
 	private ConsentOutcome canSee(Context context, PractitionerRole practitionerRole) {
-		String practitionerReference = practitionerRole
-			.getPractitioner()
-			.getReference();
-		String organizationReference = practitionerRole
-			.getOrganization()
-			.getReference();
+		String practitionerReference = practitionerRole.getPractitioner() == null ? null : practitionerRole.getPractitioner().getReference();
+		String organizationReference = practitionerRole.getOrganization() == null ? null : practitionerRole.getOrganization().getReference();
+		if (StringUtils.isBlank(practitionerReference) || StringUtils.isBlank(organizationReference)) {
+			LOGGER.warn("PractitionerRole with resource id {} does not have practitioner or / and organization", practitionerRole.getId());
+		}
 
 		String archiveNumberPractitioner = practitionerReference.substring(practitionerReference.indexOf("-") + 1);
 		String organizationId = organizationReference.substring(organizationReference.indexOf("-") + 1);
@@ -159,7 +166,10 @@ public class SecurityInterceptor extends AuthorizationInterceptor implements ICo
 
 	private ConsentOutcome canSee(Context context, Endpoint endpoint) {
 		String address = endpoint.getAddress();
-		String archiveNumber = address.substring(address.lastIndexOf("/") + 2);
+		String archiveNumber = StringUtils.isEmpty(address) ? null : address.substring(address.lastIndexOf("/") + 2);
+		if (StringUtils.isEmpty(archiveNumber)) {
+			LOGGER.warn("Endpoint with resource id {} does not have a correct address", endpoint.getId());
+		}
 
 		return verify(context,
 			consultingDoctor(archiveNumber)

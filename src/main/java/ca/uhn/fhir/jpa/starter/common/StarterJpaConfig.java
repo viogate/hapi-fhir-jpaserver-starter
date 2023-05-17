@@ -66,6 +66,7 @@ import com.cegeka.vconsult.fhir.server.order.ServiceRequestInterceptor;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import org.hl7.fhir.common.hapi.validation.support.CachingValidationSupport;
+import org.springframework.beans.factory.BeanCreationException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -74,6 +75,7 @@ import org.springframework.core.env.ConfigurableEnvironment;
 import org.springframework.http.HttpHeaders;
 import org.springframework.orm.jpa.JpaTransactionManager;
 import org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean;
+import org.springframework.util.CollectionUtils;
 import org.springframework.web.cors.CorsConfiguration;
 
 import javax.persistence.EntityManagerFactory;
@@ -272,12 +274,9 @@ public class StarterJpaConfig {
 		fhirServer.registerProvider(jpaSystemProvider);
 		fhirServer.setServerConformanceProvider(calculateConformanceProvider(fhirSystemDao, fhirServer, daoConfig, searchParamRegistry, theValidationSupport));
 
-		//TODO switch place to make test red
-		// Security check before the request interceptor
 		fhirServer.registerInterceptor(securityInterceptor);
 		fhirServer.registerInterceptor(new ConsentInterceptor(securityInterceptor));
 		fhirServer.registerInterceptor(serviceRequestInterceptor);
-
 		/*
 		 * ETag Support
 		 */
@@ -422,8 +421,6 @@ public class StarterJpaConfig {
 
 
 		repositoryValidatingInterceptor.ifPresent(fhirServer::registerInterceptor);
-
-
 
 		return fhirServer;
 	}
