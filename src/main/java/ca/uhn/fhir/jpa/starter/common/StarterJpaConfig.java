@@ -61,7 +61,7 @@ import ca.uhn.fhir.rest.server.tenant.UrlBaseTenantIdentificationStrategy;
 import ca.uhn.fhir.rest.server.util.ISearchParamRegistry;
 import ca.uhn.fhir.validation.IValidatorModule;
 import ca.uhn.fhir.validation.ResultSeverityEnum;
-import com.cegeka.vconsult.fhir.server.SecurityInterceptor;
+import com.cegeka.vconsult.fhir.server.security.SecurityInterceptor;
 import com.cegeka.vconsult.fhir.server.order.ServiceRequestInterceptor;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;

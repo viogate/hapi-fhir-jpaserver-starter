@@ -1,4 +1,4 @@
-package com.cegeka.vconsult.fhir.server;
+package com.cegeka.vconsult.fhir.server.security;
 
 import be.cegeka.vconsult.security.AuthorizationException;
 import be.cegeka.vconsult.security.api.Context;
@@ -26,7 +26,7 @@ import static be.cegeka.vconsult.security.api.Verification.*;
 @Component
 public class SecurityInterceptor extends AuthorizationInterceptor implements IConsentService {
 	private static final Logger LOGGER = org.slf4j.LoggerFactory.getLogger(SecurityInterceptor.class);
-	private static final Verification FHIR_ALL = anyPermission("FHIR_ALL");
+	private static final Verification FHIR_ALL = anyPermission(Permission.FHIR_ALL);
 	public static final String ROOT_PARTITION_NAME = "root";
 	public static final String DOCTOR_PARTITION_NAME_PREFIX = "D";
 

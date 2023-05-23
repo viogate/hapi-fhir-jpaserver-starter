@@ -4,7 +4,7 @@ import ca.uhn.fhir.rest.api.server.RequestDetails;
 import ca.uhn.fhir.rest.server.interceptor.auth.RuleBuilder;
 import ca.uhn.fhir.rest.server.interceptor.consent.ConsentOutcome;
 import ca.uhn.fhir.rest.server.interceptor.consent.IConsentContextServices;
-import com.cegeka.vconsult.fhir.server.SecurityInterceptor;
+import com.cegeka.vconsult.fhir.server.security.SecurityInterceptor;
 import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
