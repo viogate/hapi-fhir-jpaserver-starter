@@ -63,6 +63,7 @@ import ca.uhn.fhir.validation.IValidatorModule;
 import ca.uhn.fhir.validation.ResultSeverityEnum;
 import com.cegeka.vconsult.fhir.server.SecurityInterceptor;
 import com.cegeka.vconsult.fhir.server.order.ServiceRequestInterceptor;
+import com.cegeka.vconsult.fhir.server.order.ServiceRequestInterceptor;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import org.hl7.fhir.common.hapi.validation.support.CachingValidationSupport;
@@ -273,6 +274,7 @@ public class StarterJpaConfig {
 		fhirServer.registerProviders(resourceProviderFactory.createProviders());
 		fhirServer.registerProvider(jpaSystemProvider);
 		fhirServer.setServerConformanceProvider(calculateConformanceProvider(fhirSystemDao, fhirServer, daoConfig, searchParamRegistry, theValidationSupport));
+		fhirServer.registerInterceptor(serviceRequestInterceptor);
 
 		fhirServer.registerInterceptor(securityInterceptor);
 		fhirServer.registerInterceptor(new ConsentInterceptor(securityInterceptor));

@@ -3,13 +3,6 @@ package integration;
 import be.cegeka.vconsult.security.test.MockContext;
 import ca.uhn.fhir.context.FhirContext;
 import ca.uhn.fhir.jpa.starter.Application;
-import ca.uhn.fhir.rest.api.server.RequestDetails;
-import ca.uhn.fhir.rest.client.api.ServerValidationModeEnum;
-import ca.uhn.fhir.rest.server.interceptor.auth.RuleBuilder;
-import ca.uhn.fhir.rest.server.interceptor.consent.ConsentOutcome;
-import ca.uhn.fhir.rest.server.interceptor.consent.IConsentContextServices;
-import com.cegeka.vconsult.fhir.server.SecurityInterceptor;
-import com.cegeka.vconsult.fhir.server.order.ServiceRequestInterceptor;
 import com.github.tomakehurst.wiremock.junit5.WireMockRuntimeInfo;
 import com.github.tomakehurst.wiremock.junit5.WireMockTest;
 import org.hl7.fhir.instance.model.api.IBaseResource;
@@ -80,7 +73,6 @@ public class ServiceRequestInterceptionTest {
 
 	@BeforeEach
 	public void initForEach() {
-		ctx.getRestfulClientFactory().setServerValidationMode(ServerValidationModeEnum.NEVER);
 		createPartition(PARTITION);
 		stubFor(post(fhirSyncDraftEndpoint + "/" + PARTITION).willReturn(ok(FHIR_SYNC_RESPONSE_BODY)));
 	}
@@ -101,7 +93,7 @@ public class ServiceRequestInterceptionTest {
 			"{" +
 				"\"resourceType\": \"ServiceRequest\"," +
 				"\"id\": \"A001234234\"" +
-				"}";
+			"}";
 
 		ResponseEntity<String> response = restTemplate.exchange(LOCALHOST + localPort + "/fhir/{partition}/ServiceRequest/{id}", HttpMethod.PUT, newRequest(requestBody), String.class, Map.of("partition", PARTITION, "id", "A001234234"));
 
@@ -136,7 +128,7 @@ public class ServiceRequestInterceptionTest {
 				"\"url\": \"ServiceRequest\"" +
 				"}" +
 				"}]" +
-				"}";
+			"}";
 
 		ResponseEntity<String> response = restTemplate.exchange(LOCALHOST + localPort + "/fhir/{partition}", HttpMethod.POST, newRequest(requestBody), String.class, PARTITION);
 
@@ -159,7 +151,7 @@ public class ServiceRequestInterceptionTest {
 				"\"name\": \"description\"," +
 				"\"valueString\": \"partition\"" +
 				"} ]" +
-				"}";
+			"}";
 		restTemplate.exchange(LOCALHOST + localPort + "/fhir/root/$partition-management-create-partition", HttpMethod.POST, newRequest(requestBody), String.class);
 	}
 
