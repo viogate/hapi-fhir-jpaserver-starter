@@ -4,6 +4,8 @@ WORKDIR /tmp/hapi-fhir-jpaserver-starter
 ARG OPENTELEMETRY_JAVA_AGENT_VERSION=1.17.0
 RUN curl -LSsO https://github.com/open-telemetry/opentelemetry-java-instrumentation/releases/download/v${OPENTELEMETRY_JAVA_AGENT_VERSION}/opentelemetry-javaagent.jar
 
+RUN mkdir .mvn && echo "-Djavax.net.ssl.trustStore=/root/.viollier/viollier-cacerts.jks -Djavax.net.ssl.trustStorePassword=changeit" > .mvn/jvm.config
+COPY target/viollier-cacerts.jks /root/.viollier/viollier-cacerts.jks
 COPY pom.xml .
 COPY server.xml .
 RUN mvn -ntp dependency:go-offline

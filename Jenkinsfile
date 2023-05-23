@@ -46,6 +46,9 @@ pipeline {
         }
         stage('Test') {
             steps {
+                script {
+                    truststoreSetup.setupMvn()
+                }
                 sh "mvn clean test"
             }
         }
