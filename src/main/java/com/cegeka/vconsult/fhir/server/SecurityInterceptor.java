@@ -27,6 +27,8 @@ import static be.cegeka.vconsult.security.api.Verification.*;
 public class SecurityInterceptor extends AuthorizationInterceptor implements IConsentService {
 	private static final Logger LOGGER = org.slf4j.LoggerFactory.getLogger(SecurityInterceptor.class);
 	private static final Verification FHIR_ALL = anyPermission("FHIR_ALL");
+	public static final String ROOT_PARTITION_NAME = "root";
+	public static final String DOCTOR_PARTITION_NAME_PREFIX = "D";
 
 	private final ContextProvider contextProvider;
 
@@ -49,12 +51,12 @@ public class SecurityInterceptor extends AuthorizationInterceptor implements ICo
 			}
 
 			return new RuleBuilder()
-				.allow().read().resourcesOfType(Organization.class).withAnyId().forTenantIds("root").andThen()
-				.allow().read().resourcesOfType(PractitionerRole.class).withAnyId().forTenantIds("root").andThen()
-				.allow().read().resourcesOfType(Endpoint.class).withAnyId().forTenantIds("root").andThen()
+				.allow().read().resourcesOfType(Organization.class).withAnyId().forTenantIds(ROOT_PARTITION_NAME).andThen()
+				.allow().read().resourcesOfType(PractitionerRole.class).withAnyId().forTenantIds(ROOT_PARTITION_NAME).andThen()
+				.allow().read().resourcesOfType(Endpoint.class).withAnyId().forTenantIds(ROOT_PARTITION_NAME).andThen()
 				.allow().read().resourcesOfType(Practitioner.class).withAnyId().andThen()
-				.allow().read().resourcesOfType(ServiceRequest.class).withAnyId().notForTenantIds("root").andThen()
-				.allow().create().resourcesOfType(ServiceRequest.class).withAnyId().notForTenantIds("root").andThen()
+				.allow().read().resourcesOfType(ServiceRequest.class).withAnyId().notForTenantIds(ROOT_PARTITION_NAME).andThen()
+				.allow().create().resourcesOfType(ServiceRequest.class).withAnyId().notForTenantIds(ROOT_PARTITION_NAME).andThen()
 				.denyAll()
 				.build();
 		} else {
@@ -66,13 +68,13 @@ public class SecurityInterceptor extends AuthorizationInterceptor implements ICo
 
 	private boolean isAllowedToSeePartition(RequestDetails requestDetails, Context context) {
 		String tenantId = requestDetails.getTenantId();
-		if (tenantId.equals("root")) {
+		if (tenantId.equals(ROOT_PARTITION_NAME)) {
 			return true;
 		}
-		if (!tenantId.contains("D")) {
+		if (!tenantId.contains(DOCTOR_PARTITION_NAME_PREFIX)) {
 			return false;
 		}
-		String archiveNumber = tenantId.substring(tenantId.indexOf("D") + 1);
+		String archiveNumber = tenantId.substring(tenantId.indexOf(DOCTOR_PARTITION_NAME_PREFIX) + 1);
 		ConsentOutcome consentOutcome = verify(context, consultingDoctor(archiveNumber).or(prescribingDoctor(archiveNumber)));
 		if (consentOutcome == ConsentOutcome.REJECT) {
 			return false;
