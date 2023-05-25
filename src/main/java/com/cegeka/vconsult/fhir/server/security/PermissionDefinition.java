@@ -9,7 +9,7 @@ public class PermissionDefinition {
 	@Bean
 	public PermissionMigrations permissionMigration() {
 		return new PermissionMigrations()
-			.owner("consult-api")
+			.owner("fhir-sync")
 			.upsert(Permission.FHIR_ALL, 0, "view and edit all", Permission.INTERNAL_GROUP).disableAutoAssign().butDoAssignTo();
 	}
 }

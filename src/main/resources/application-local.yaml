@@ -1,0 +1,8 @@
+security:
+  service-accounts:
+    fhir-sync:
+      service-account: local-fhir-sync
+      permissions: FHIR_ALL
+  basic:
+    fhir-sync:
+      service-account: local-fhir-sync
