@@ -83,7 +83,6 @@ public class SecurityInterceptor extends AuthorizationInterceptor implements ICo
 		return true;
 	}
 
-
 	@Override
 	public ConsentOutcome canSeeResource(RequestDetails theRequestDetails, IBaseResource theResource, IConsentContextServices theContextServices) {
 		Context context = getContext(theRequestDetails);
@@ -95,9 +94,12 @@ public class SecurityInterceptor extends AuthorizationInterceptor implements ICo
 	}
 
 	private ConsentOutcome isResourceVisibleForRequester(IBaseResource theResource, Context context) {
-		if (theResource instanceof Basic) {
-			return canSee(context);
-		} else if (theResource instanceof Organization) {
+		ConsentOutcome consentOutComeAdminRights = verify(context, FHIR_ALL);
+		if (consentOutComeAdminRights != ConsentOutcome.REJECT) {
+			return consentOutComeAdminRights;
+		}
+
+		if (theResource instanceof Organization) {
 			return canSee(context, (Organization) theResource);
 		} else if (theResource instanceof Practitioner) {
 			return canSee(context, (Practitioner) theResource);
@@ -120,10 +122,6 @@ public class SecurityInterceptor extends AuthorizationInterceptor implements ICo
 		return false;
 	}
 
-	private ConsentOutcome canSee(Context context) {
-		return verify(context, FHIR_ALL);
-	}
-
 	private ConsentOutcome canSee(Context context, Organization organization) {
 		String masterId = organization.getIdentifier().stream()
 			.filter(i -> "http://viollier.ch/fhir/system/master-id".equals(i.getSystem()))
@@ -133,7 +131,7 @@ public class SecurityInterceptor extends AuthorizationInterceptor implements ICo
 		if (StringUtils.isBlank(masterId)) {
 			LOGGER.warn("Organization with resource id {} does not have master id", organization.getId());
 		}
-		return verify(context, masterId(masterId).or(FHIR_ALL));
+		return verify(context, masterId(masterId));
 	}
 
 	private ConsentOutcome canSee(Context context, Practitioner practitioner) {
@@ -146,7 +144,7 @@ public class SecurityInterceptor extends AuthorizationInterceptor implements ICo
 			LOGGER.warn("Practitioner with resource id {} does not have an archive number", practitioner.getId());
 		}
 
-		return verify(context, consultingDoctor(archiveNumber).or(prescribingDoctor(archiveNumber)).or(FHIR_ALL));
+		return verify(context, consultingDoctor(archiveNumber).or(prescribingDoctor(archiveNumber)));
 	}
 
 	private ConsentOutcome canSee(Context context, PractitionerRole practitionerRole) {
@@ -162,8 +160,7 @@ public class SecurityInterceptor extends AuthorizationInterceptor implements ICo
 		return verify(context,
 			consultingDoctor(archiveNumberPractitioner)
 				.or(prescribingDoctor(archiveNumberPractitioner))
-				.or(masterId(organizationId))
-				.or(FHIR_ALL));
+				.or(masterId(organizationId)));
 	}
 
 	private ConsentOutcome canSee(Context context, Endpoint endpoint) {
@@ -175,8 +172,7 @@ public class SecurityInterceptor extends AuthorizationInterceptor implements ICo
 
 		return verify(context,
 			consultingDoctor(archiveNumber)
-				.or(prescribingDoctor(archiveNumber))
-				.or(FHIR_ALL));
+				.or(prescribingDoctor(archiveNumber)));
 	}
 
 	private ConsentOutcome verify(Context context, Verification verification) {
