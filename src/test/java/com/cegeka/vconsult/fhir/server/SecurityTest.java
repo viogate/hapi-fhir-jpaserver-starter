@@ -2,7 +2,6 @@ package com.cegeka.vconsult.fhir.server;
 
 import be.cegeka.vconsult.security.test.MockContext;
 import ca.uhn.fhir.context.FhirContext;
-import ca.uhn.fhir.jpa.starter.Application;
 import ca.uhn.fhir.rest.api.CacheControlDirective;
 import ca.uhn.fhir.rest.client.api.IGenericClient;
 import ca.uhn.fhir.rest.client.api.ServerValidationModeEnum;
@@ -21,6 +20,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.web.server.LocalServerPort;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 
 import java.util.HashSet;
@@ -31,7 +32,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @ExtendWith(SpringExtension.class)
 @WireMockTest
-@SpringBootTest(classes = {Application.class, TestConfiguration.class}, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(classes = {TestableApplication.class, TestConfiguration.class}, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 public class SecurityTest {
 
 	@Autowired
@@ -41,6 +42,11 @@ public class SecurityTest {
 	private int port;
 
 	private final static FhirContext ctx = FhirContext.forR4();
+
+	@DynamicPropertySource
+	static void registerDynamicProperties(DynamicPropertyRegistry registry) {
+		registry.add("securitylib.load.production", () -> "false");
+	}
 
 	@BeforeEach
 	void beforeEach() {
@@ -422,6 +428,14 @@ public class SecurityTest {
 
 	@Nested
 	class Default {
+
+		@Test
+		void whenIHaveSpecialPermissionsICanSeeIfAPartitionExists() {
+			mockContext.setPermissions(Set.of("FHIR_ALL"));
+
+			hasPartition(-11);
+		}
+
 		@Test
 		void whenIHaveSpecialPermission_thenICanAccessTheDefaultPartition() {
 			mockContext.setPermissions(Set.of("FHIR_ALL"));
