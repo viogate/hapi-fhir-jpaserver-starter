@@ -47,5 +47,7 @@ WORKDIR /app
 
 COPY --chown=nonroot:nonroot --from=build-distroless /app /app
 COPY --chown=nonroot:nonroot --from=build-hapi /tmp/hapi-fhir-jpaserver-starter/opentelemetry-javaagent.jar /app
+COPY --chown=nonroot:nonroot --from=build-hapi /root/.viollier/viollier-cacerts.jks /root/.viollier/viollier-cacerts.jks
 
+ENTRYPOINT ["java", "-Djavax.net.ssl.trustStore=/root/.viollier/viollier-cacerts.jks", "-Djavax.net.ssl.trustStorePassword=changeit", "-jar"]
 CMD ["/app/main.war"]
