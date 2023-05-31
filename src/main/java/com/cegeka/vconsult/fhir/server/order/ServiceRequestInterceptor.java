@@ -1,11 +1,17 @@
 package com.cegeka.vconsult.fhir.server.order;
 
+import be.cegeka.vconsult.security.AuthorizationException;
+import be.cegeka.vconsult.security.api.Context;
+import be.cegeka.vconsult.security.api.ContextProvider;
 import ca.uhn.fhir.interceptor.api.Hook;
 import ca.uhn.fhir.interceptor.api.Interceptor;
 import ca.uhn.fhir.interceptor.api.Pointcut;
 import ca.uhn.fhir.rest.api.RestOperationTypeEnum;
 import ca.uhn.fhir.rest.api.server.RequestDetails;
+import ca.uhn.fhir.rest.server.exceptions.AuthenticationException;
+import ca.uhn.fhir.rest.server.servlet.ServletRequestDetails;
 import org.apache.commons.io.IOUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.hl7.fhir.r4.model.ResourceType;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -25,13 +31,20 @@ import java.util.List;
 @Interceptor
 @Component
 public class ServiceRequestInterceptor {
+	public static final String REQUEST_PARAMETER_HOSPITAL_ID = "hospitalId";
 	private final RestTemplate restTemplate;
 	private final String fhirSyncUrl;
 	private final String fhirSyncDraftEndpoint;
 
+	private final ContextProvider contextProvider;
+
 	@Autowired
-	public ServiceRequestInterceptor(RestTemplate restTemplate, @Value("${fhirSync.url}") String fhirSyncUrl, @Value("${fhirSync.draftEndpoint}") String fhirSyncDraftEndpoint) {
+	public ServiceRequestInterceptor(RestTemplate restTemplate,
+												ContextProvider contextProvider,
+												@Value("${fhirSync.url}") String fhirSyncUrl,
+												@Value("${fhirSync.draftEndpoint}") String fhirSyncDraftEndpoint) {
 		this.restTemplate = restTemplate;
+		this.contextProvider = contextProvider;
 		this.fhirSyncUrl = fhirSyncUrl;
 		this.fhirSyncDraftEndpoint = fhirSyncDraftEndpoint;
 	}
@@ -70,7 +83,32 @@ public class ServiceRequestInterceptor {
 	private ResponseEntity<String> forwardToFhirSync(RequestDetails requestDetails) throws IOException {
 		String body = IOUtils.toString(requestDetails.getReader());
 		String partition = requestDetails.getTenantId();
-		return restTemplate.exchange(fhirSyncUrl + fhirSyncDraftEndpoint + "/{partition}", HttpMethod.POST, newRequest(body), String.class, partition);
+		String hospitalId = getHospitalId(requestDetails);
+		if (StringUtils.isBlank(hospitalId)) {
+			return restTemplate.exchange(fhirSyncUrl + fhirSyncDraftEndpoint + "/{partition}", HttpMethod.POST, newRequest(body), String.class, partition);
+		}
+		return restTemplate.exchange(fhirSyncUrl + fhirSyncDraftEndpoint + "/{partition}?" + REQUEST_PARAMETER_HOSPITAL_ID + "=" + hospitalId, HttpMethod.POST, newRequest(body), String.class, partition);
+	}
+
+	private String getHospitalId(RequestDetails requestDetails) {
+		Context context = getContext(requestDetails);
+		try {
+			if (context.getHospital() == null) {
+				return "";
+			}
+			return String.valueOf(context.getHospital());
+		} catch (AuthorizationException e) {
+			return "";
+		}
+	}
+
+	private Context getContext(RequestDetails theRequestDetails) {
+		ServletRequestDetails servletRequestDetails = (ServletRequestDetails) theRequestDetails;
+		try {
+			return contextProvider.getContext(servletRequestDetails.getServletRequest());
+		} catch (AuthorizationException e) {
+			throw new AuthenticationException(e.getMessage());
+		}
 	}
 
 	private void writeResponse(HttpServletResponse response, ResponseEntity<String> fhirSyncResponse) throws IOException {
