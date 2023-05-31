@@ -207,7 +207,7 @@ fhirSync:
 security:
   basic:
     fhir-sync:
-      password: ${SECURITY_BASIC_FHIRSYNC_PASSWORD}
+      password: ${BASIC_AUTHENTICATION_FHIRSYNC_PASSWORD}
   secure:
     - /fhir/**
   insecure:
