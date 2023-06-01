@@ -21,6 +21,8 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.util.UriComponents;
+import org.springframework.web.util.UriComponentsBuilder;
 
 import javax.servlet.http.HttpServletResponse;
 import javax.ws.rs.core.MediaType;
@@ -32,6 +34,7 @@ import java.util.List;
 @Component
 public class ServiceRequestInterceptor {
 	public static final String REQUEST_PARAMETER_HOSPITAL_ID = "hospitalId";
+	public static final String REQUEST_PARAMETER_USER_SHORT_ID = "userShortId";
 	private final RestTemplate restTemplate;
 	private final String fhirSyncUrl;
 	private final String fhirSyncDraftEndpoint;
@@ -83,11 +86,21 @@ public class ServiceRequestInterceptor {
 	private ResponseEntity<String> forwardToFhirSync(RequestDetails requestDetails) throws IOException {
 		String body = IOUtils.toString(requestDetails.getReader());
 		String partition = requestDetails.getTenantId();
+
+		UriComponentsBuilder uriComponentsBuilder = UriComponentsBuilder
+			.fromHttpUrl(fhirSyncUrl + fhirSyncDraftEndpoint + "/{partition}");
+
+		String shortId = getShortId(requestDetails);
 		String hospitalId = getHospitalId(requestDetails);
-		if (StringUtils.isBlank(hospitalId)) {
-			return restTemplate.exchange(fhirSyncUrl + fhirSyncDraftEndpoint + "/{partition}", HttpMethod.POST, newRequest(body), String.class, partition);
+		if (StringUtils.isNotBlank(shortId)) {
+			uriComponentsBuilder.queryParam(REQUEST_PARAMETER_USER_SHORT_ID, shortId);
 		}
-		return restTemplate.exchange(fhirSyncUrl + fhirSyncDraftEndpoint + "/{partition}?" + REQUEST_PARAMETER_HOSPITAL_ID + "=" + hospitalId, HttpMethod.POST, newRequest(body), String.class, partition);
+		if (StringUtils.isNotBlank(hospitalId)) {
+			uriComponentsBuilder.queryParam(REQUEST_PARAMETER_HOSPITAL_ID, hospitalId);
+		}
+
+		UriComponents uriComponents = uriComponentsBuilder.buildAndExpand(partition);
+		return restTemplate.exchange(uriComponents.toUriString(), HttpMethod.POST, newRequest(body), String.class, partition);
 	}
 
 	private String getHospitalId(RequestDetails requestDetails) {
@@ -97,6 +110,18 @@ public class ServiceRequestInterceptor {
 				return "";
 			}
 			return String.valueOf(context.getHospital());
+		} catch (AuthorizationException e) {
+			return "";
+		}
+	}
+
+	private String getShortId(RequestDetails requestDetails) {
+		Context context = getContext(requestDetails);
+		try {
+			if (context.getUserShortId() == null) {
+				return "";
+			}
+			return String.valueOf(context.getUserShortId());
 		} catch (AuthorizationException e) {
 			return "";
 		}

@@ -41,7 +41,7 @@ public class TestConfiguration {
 
 	@Primary
 	@Bean
-	public ContextProvider contextProvider() throws AuthorizationException {
+	public ContextProvider contextProvider() {
 		return mock(ContextProvider.class);
 	}
 }

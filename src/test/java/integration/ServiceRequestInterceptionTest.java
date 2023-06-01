@@ -108,6 +108,32 @@ public class ServiceRequestInterceptionTest {
 	}
 
 	@Test
+	public void serviceRequestPostWithPartitionAndUserShortCodeIsInterceptedAndForwardedToFhirSync() throws AuthorizationException {
+		Context contextMock = mock(Context.class);
+		when(contextMock.getHospital()).thenReturn(null);
+		when(contextMock.getUserShortId()).thenReturn("50");
+
+		when(contextProvider.getContext(Mockito.any())).thenReturn(contextMock);
+		String requestBody = "{ \"resourceType\": \"ServiceRequest\" }";
+		restTemplate.exchange(LOCALHOST + localPort + "/fhir/{partition}/ServiceRequest", HttpMethod.POST, newRequest(requestBody), String.class, PARTITION);
+
+		verify(postRequestedFor(urlEqualTo(fhirSyncDraftEndpoint + "/" + PARTITION + "?userShortId=50")));
+	}
+
+	@Test
+	public void serviceRequestPostWithPartitionAndUserShortCodeAndHospitalIdIsInterceptedAndForwardedToFhirSync() throws AuthorizationException {
+		Context contextMock = mock(Context.class);
+		when(contextMock.getUserShortId()).thenReturn("50");
+		when(contextMock.getHospital()).thenReturn(100);
+
+		when(contextProvider.getContext(Mockito.any())).thenReturn(contextMock);
+		String requestBody = "{ \"resourceType\": \"ServiceRequest\" }";
+		restTemplate.exchange(LOCALHOST + localPort + "/fhir/{partition}/ServiceRequest", HttpMethod.POST, newRequest(requestBody), String.class, PARTITION);
+
+		verify(postRequestedFor(urlEqualTo(fhirSyncDraftEndpoint + "/" + PARTITION + "?userShortId=50&hospitalId=100")));
+	}
+
+	@Test
 	public void serviceRequestPutIsNotIntercepted() {
 		String requestBody =
 			"{" +
