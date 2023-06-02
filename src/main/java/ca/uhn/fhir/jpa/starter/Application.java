@@ -27,6 +27,10 @@ import org.springframework.context.annotation.Import;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.context.support.AnnotationConfigWebApplicationContext;
 import org.springframework.web.servlet.DispatcherServlet;
+import org.springframework.web.servlet.HandlerMapping;
+import org.springframework.web.servlet.handler.SimpleUrlHandlerMapping;
+
+import java.util.Map;
 
 @ServletComponentScan(basePackageClasses = {RestfulServer.class})
 @SpringBootApplication(exclude = {ElasticsearchRestClientAutoConfiguration.class})
@@ -69,6 +73,14 @@ public class Application extends SpringBootServletInitializer {
     servletRegistrationBean.setLoadOnStartup(1);
 
     return servletRegistrationBean;
+  }
+
+  @Bean
+  public HandlerMapping exceptionHandler() {
+	  SimpleUrlHandlerMapping simpleUrlHandlerMapping = new SimpleUrlHandlerMapping();
+	  Map<String, Object> urlMap = Map.of("/error", new DefaultErrorController());
+	  simpleUrlHandlerMapping.setUrlMap(urlMap);
+	  return simpleUrlHandlerMapping;
   }
 
   @Bean

@@ -3,6 +3,11 @@ security:
     fhir-sync:
       service-account: local-fhir-sync
       permissions: FHIR_ALL
+    automated-tests:
+      service-account: "local-automated-tests"
+      permissions: FHIR_ALL
   basic:
     fhir-sync:
       service-account: local-fhir-sync
+    automated-tests:
+      service-account: local-automated-tests
