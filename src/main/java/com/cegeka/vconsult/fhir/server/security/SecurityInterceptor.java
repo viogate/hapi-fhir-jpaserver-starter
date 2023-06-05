@@ -57,6 +57,7 @@ public class SecurityInterceptor extends AuthorizationInterceptor implements ICo
 				.allow().read().resourcesOfType(Practitioner.class).withAnyId().andThen()
 				.allow().read().resourcesOfType(ServiceRequest.class).withAnyId().notForTenantIds(ROOT_PARTITION_NAME).andThen()
 				.allow().create().resourcesOfType(ServiceRequest.class).withAnyId().notForTenantIds(ROOT_PARTITION_NAME).andThen()
+				.allow().read().resourcesOfType(Patient.class).withAnyId().notForTenantIds(ROOT_PARTITION_NAME).andThen()
 				.denyAll()
 				.build();
 		} else {
@@ -116,6 +117,9 @@ public class SecurityInterceptor extends AuthorizationInterceptor implements ICo
 
 	private boolean resourceTypeOnlyPresentInPrivateDoctorPartition(IBaseResource theResource) {
 		if (theResource instanceof ServiceRequest) {
+			return true;
+		}
+		if (theResource instanceof Patient) {
 			return true;
 		}
 

@@ -426,6 +426,64 @@ public class SecurityTest {
 			.execute();
 	}
 
+	private String createPatient(String partitionName, String vioNumber) {
+		org.hl7.fhir.r4.model.Patient patient = new org.hl7.fhir.r4.model.Patient();
+		String patientFullId = String.format("Patient/%s-%s", partitionName, vioNumber);
+		patient.setId(patientFullId);
+
+		return getAuthenticatedClient(partitionName)
+			.create()
+			.resource(patient)
+			.execute()
+			.getId()
+			.getIdPart();
+	}
+
+	private String updatePatient(String partitionName, String vioNumber) {
+		String patientFullId = String.format("Patient/%s-%s", partitionName, vioNumber);
+		Patient patient = new Patient();
+		patient.setId(patientFullId);
+		Identifier identifier = new Identifier();
+		identifier.setSystem("http://viollier.ch/fhir/system/vio-number");
+		identifier.setValue(vioNumber);
+		patient.addIdentifier(identifier);
+
+		return getAuthenticatedClient(partitionName)
+			.update()
+			.resource(patient)
+			.execute()
+			.getId()
+			.getIdPart();
+	}
+
+	private Bundle searchPatient(String partitionName, String patientId) {
+		return getAuthenticatedClient(partitionName)
+			.<Bundle>search()
+			.forResource(org.hl7.fhir.r4.model.Patient.class)
+			.where(IAnyResource.RES_ID.exactly().identifier(patientId))
+			.cacheControl(CacheControlDirective.noCache())
+			.execute();
+	}
+
+	private String setupPatient(String partitionName, String vioNumber) {
+		mockContext.setPermissions(Set.of("FHIR_ALL"));
+
+		String idPart = createPatient(partitionName, vioNumber);
+
+		resetMockContext();
+
+		return idPart;
+	}
+
+	private org.hl7.fhir.r4.model.Patient getPatient(String partitionName, String id) {
+		return getAuthenticatedClient(partitionName)
+			.read()
+			.resource(org.hl7.fhir.r4.model.Patient.class)
+			.withId(id)
+			.cacheControl(CacheControlDirective.noCache())
+			.execute();
+	}
+
 	@Nested
 	class Default {
 
@@ -948,6 +1006,25 @@ public class SecurityTest {
 				}).isInstanceOfAny(ForbiddenOperationException.class);
 			}
 		}
+
+		@Nested
+		class Patient {
+			@Test
+			void iCannotGetSinceResourceShouldNotExistInThisPartition() {
+				String patientId = setupServiceRequest(partitionName, "123");
+				assertThatThrownBy(() -> {
+					getPatient(partitionName, patientId);
+				}).isInstanceOfAny(ForbiddenOperationException.class);
+			}
+
+			@Test
+			void iCannotSearchSinceResourceShouldNotExistInThisPartition() {
+				String patientId = setupServiceRequest(partitionName, "123");
+				assertThatThrownBy(() -> {
+					searchServiceRequest(partitionName, patientId);
+				}).isInstanceOfAny(ForbiddenOperationException.class);
+			}
+		}
 	}
 
 	@Nested
@@ -1276,6 +1353,61 @@ public class SecurityTest {
 				}).isInstanceOfAny(ForbiddenOperationException.class);
 			}
 
+		}
+
+		@Nested
+		class Patient {
+			@Test
+			void iCannotCreate() {
+				assertThatThrownBy(() -> {
+					createPatient(defaultDoctorPartitionName, "vio-number");
+				}).isInstanceOfAny(ForbiddenOperationException.class);
+			}
+
+			@Test
+			void iCannotUpdate() {
+				assertThatThrownBy(() -> {
+					updatePatient(defaultDoctorPartitionName,  "vio-number");
+				}).isInstanceOfAny(ForbiddenOperationException.class);
+			}
+
+			@Test
+			void iCanSearch() {
+				String patientId = setupPatient(defaultDoctorPartitionName, "vio-number");
+				Bundle bundle = searchPatient(defaultDoctorPartitionName, patientId);
+				assertThat(bundle.getEntry()).hasSize(1);
+			}
+
+			@Test
+			void iCanGet() {
+				String patientId = setupPatient(defaultDoctorPartitionName, "vio-number");
+				org.hl7.fhir.r4.model.Patient patient = getPatient(defaultDoctorPartitionName, patientId);
+				assertThat(patient).isNotNull();
+			}
+
+			@Test
+			void iCannotGetAnother() {
+				String patientId = setupPatient(defaultDoctorPartitionName, "vio-number");
+
+				mockContext.setFailVerifyConsultingDoctors(true);
+				mockContext.setFailVerifyPrescribingDoctors(true);
+
+				assertThatThrownBy(() -> {
+					getPatient(defaultDoctorPartitionName, patientId);
+				}).isInstanceOfAny(ForbiddenOperationException.class);
+			}
+
+			@Test
+			void iCannotSearchAnother() {
+				String patientId = setupPatient(defaultDoctorPartitionName, "vio-number");
+
+				mockContext.setFailVerifyConsultingDoctors(true);
+				mockContext.setFailVerifyPrescribingDoctors(true);
+
+				assertThatThrownBy(() -> {
+					searchPatient(defaultDoctorPartitionName, patientId);
+				}).isInstanceOfAny(ForbiddenOperationException.class);
+			}
 		}
 	}
 
