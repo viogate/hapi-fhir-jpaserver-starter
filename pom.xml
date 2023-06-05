@@ -39,11 +39,11 @@
             <url>https://oss.sonatype.org/content/repositories/snapshots/</url>
         </repository>
         <repository>
-            <id>artifactory-snapshot</id>
+            <id>artifactory</id>
             <snapshots>
                 <enabled>true</enabled>
             </snapshots>
-            <url>https://artifactory.viollier.ch/artifactory/build-dependencies-snapshots/</url>
+            <url>https://artifactory.viollier.ch/artifactory/build-dependencies/</url>
         </repository>
     </repositories>
 
