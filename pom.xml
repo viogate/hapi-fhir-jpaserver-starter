@@ -38,6 +38,13 @@
             </snapshots>
             <url>https://oss.sonatype.org/content/repositories/snapshots/</url>
         </repository>
+        <repository>
+            <id>artifactory</id>
+            <snapshots>
+                <enabled>true</enabled>
+            </snapshots>
+            <url>https://artifactory.viollier.ch/artifactory/build-dependencies/</url>
+        </repository>
     </repositories>
 
 
@@ -355,6 +362,12 @@
             <artifactId>spring-boot-starter-test</artifactId>
             <version>${spring_boot_version}</version>
             <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>be.cegeka.vconsult</groupId>
+            <artifactId>security-lib</artifactId>
+            <version>3.0.0</version>
         </dependency>
 
         <dependency>

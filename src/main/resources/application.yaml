@@ -203,3 +203,14 @@ hapi:
 fhirSync:
   url: 'http://localhost:8100'
   draftEndpoint: '/internal/v1/draft'
+
+security:
+  basic:
+    fhir-sync:
+      password: ${BASIC_AUTHENTICATION_FHIRSYNC_PASSWORD}
+    automated-tests:
+      password: ${BASIC_AUTHENTICATION_AUTOMATEDTESTS_PASSWORD}
+  secure:
+    - /fhir/**
+  insecure:
+    - /**
