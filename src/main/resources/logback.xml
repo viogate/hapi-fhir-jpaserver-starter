@@ -16,8 +16,20 @@
 		<appender-ref ref="STDOUT" />
 	</logger>
 
-	<root level="INFO">
-		<appender-ref ref="STDOUT" />
+	<root level="info">
+	<if condition="${kubernetes}">
+		<then>
+			<appender name="console" class="ch.qos.logback.core.ConsoleAppender">
+				<encoder class="net.logstash.logback.encoder.LogstashEncoder">
+					<customFields>
+						{"environment":"${env}", "application":"fhir-server"}
+					</customFields>
+				</encoder>
+			</appender>
+		</then>
+		<else>
+			<appender-ref ref="STDOUT" />
+		</else>
+	</if>
 	</root>
-
 </configuration>
