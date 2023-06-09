@@ -17,12 +17,12 @@
 	</logger>
 
 	<root level="info">
-	<if condition="${kubernetes:false}">
+	<if condition="${kubernetes:-false}">
 		<then>
 			<appender name="console" class="ch.qos.logback.core.ConsoleAppender">
 				<encoder class="net.logstash.logback.encoder.LogstashEncoder">
 					<customFields>
-						{"environment":"${env:local}", "application":"fhir-server"}
+						{"environment":"${env:-local}", "application":"fhir-server"}
 					</customFields>
 				</encoder>
 			</appender>
