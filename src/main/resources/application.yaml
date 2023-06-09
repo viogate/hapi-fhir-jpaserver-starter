@@ -50,6 +50,7 @@ spring:
   ### elastic parameters ===> see also elasticsearch section below <===
 #      hibernate.search.backend.type: elasticsearch
 #      hibernate.search.backend.analysis.configurer: ca.uhn.fhir.jpa.search.HapiHSearchAnalysisConfigurers$HapiElasticAnalysisConfigurer
+
 hapi:
   fhir:
     ### This enables the swagger-ui at /fhir/swagger-ui/index.html as well as the /fhir/api-docs (see https://hapifhir.io/hapi-fhir/docs/server_plain/openapi.html)
@@ -198,3 +199,18 @@ hapi:
 #  protocol: 'http'
 #  schema_management_strategy: CREATE
 #  username: SomeUsername
+
+fhirSync:
+  url: 'http://localhost:8100'
+  draftEndpoint: '/internal/v1/draft'
+
+security:
+  basic:
+    fhir-sync:
+      password: ${BASIC_AUTHENTICATION_FHIRSYNC_PASSWORD}
+    automated-tests:
+      password: ${BASIC_AUTHENTICATION_AUTOMATEDTESTS_PASSWORD}
+  secure:
+    - /fhir/**
+  insecure:
+    - /**

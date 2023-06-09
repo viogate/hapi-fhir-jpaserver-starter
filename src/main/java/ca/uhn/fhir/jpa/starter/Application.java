@@ -17,14 +17,20 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.autoconfigure.elasticsearch.ElasticsearchRestClientAutoConfiguration;
 import org.springframework.boot.builder.SpringApplicationBuilder;
+import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.boot.web.servlet.ServletComponentScan;
 import org.springframework.boot.web.servlet.ServletRegistrationBean;
 import org.springframework.boot.web.servlet.support.SpringBootServletInitializer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.context.annotation.Import;
+import org.springframework.web.client.RestTemplate;
 import org.springframework.web.context.support.AnnotationConfigWebApplicationContext;
 import org.springframework.web.servlet.DispatcherServlet;
+import org.springframework.web.servlet.HandlerMapping;
+import org.springframework.web.servlet.handler.SimpleUrlHandlerMapping;
+
+import java.util.Map;
 
 @ServletComponentScan(basePackageClasses = {RestfulServer.class})
 @SpringBootApplication(exclude = {ElasticsearchRestClientAutoConfiguration.class})
@@ -70,6 +76,14 @@ public class Application extends SpringBootServletInitializer {
   }
 
   @Bean
+  public HandlerMapping exceptionHandler() {
+	  SimpleUrlHandlerMapping simpleUrlHandlerMapping = new SimpleUrlHandlerMapping();
+	  Map<String, Object> urlMap = Map.of("/error", new DefaultErrorController());
+	  simpleUrlHandlerMapping.setUrlMap(urlMap);
+	  return simpleUrlHandlerMapping;
+  }
+
+  @Bean
   public ServletRegistrationBean overlayRegistrationBean() {
 
     AnnotationConfigWebApplicationContext annotationConfigWebApplicationContext = new AnnotationConfigWebApplicationContext();
@@ -87,4 +101,9 @@ public class Application extends SpringBootServletInitializer {
     return registrationBean;
 
   }
+
+	@Bean
+	public RestTemplate restTemplate(RestTemplateBuilder builder) {
+		return builder.build();
+	}
 }
