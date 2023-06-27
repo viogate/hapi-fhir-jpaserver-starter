@@ -1,13 +1,44 @@
 security:
   service-accounts:
     fhir-sync:
-      service-account: local-fhir-sync
+      service-account: dev-fhir-sync
       permissions: FHIR_ALL
     automated-tests:
       service-account: "local-automated-tests"
       permissions: FHIR_ALL
   basic:
     fhir-sync:
-      service-account: local-fhir-sync
+      service-account: dev-fhir-sync
+      password: //TODO see vault
     automated-tests:
       service-account: local-automated-tests
+
+spring:
+  datasource:
+    url: "jdbc:postgresql://valvconsultdbdev01.dev.viollier.ch/dev-fhir-server"
+    driverClassName: org.postgresql.Driver
+    username: gijs
+    password: //TODO use own personal postgress creds
+fhirSync:
+  url: http://dev-fhir-sync-http.dev-v-consult.svc.cluster.local:8100/
+  draftEndpoint: '/internal/v1/draft'
+hapi:
+  fhir:
+    path_prefix: /fhir/r4
+    partitioning:
+      allow_references_across_partitions: false
+      partitioning_include_in_search_hashes: false
+    narrative_enabled: false
+    enforce_referential_integrity_on_delete: false
+    supported_resource_types:
+      - Basic
+      - DiagnosticReport
+      - Endpoint
+      - Observation
+      - Organization
+      - Patient
+      - Practitioner
+      - PractitionerRole
+      - ServiceRequest
+      - Specimen
+      - Subscription # Otherwise the server is unhappy and won't start

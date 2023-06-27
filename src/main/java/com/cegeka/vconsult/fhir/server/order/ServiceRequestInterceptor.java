@@ -30,7 +30,9 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.List;
 
-@Interceptor
+@Interceptor(
+	order = 1000
+)
 @Component
 public class ServiceRequestInterceptor {
 	public static final String REQUEST_PARAMETER_HOSPITAL_ID = "hospitalId";
