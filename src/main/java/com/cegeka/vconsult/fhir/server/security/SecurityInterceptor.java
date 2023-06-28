@@ -4,6 +4,8 @@ import be.cegeka.vconsult.security.AuthorizationException;
 import be.cegeka.vconsult.security.api.Context;
 import be.cegeka.vconsult.security.api.ContextProvider;
 import be.cegeka.vconsult.security.api.Verification;
+import ca.uhn.fhir.interceptor.api.Hook;
+import ca.uhn.fhir.interceptor.api.Pointcut;
 import ca.uhn.fhir.rest.api.server.RequestDetails;
 import ca.uhn.fhir.rest.server.exceptions.AuthenticationException;
 import ca.uhn.fhir.rest.server.interceptor.auth.AuthorizationInterceptor;
@@ -34,6 +36,17 @@ public class SecurityInterceptor extends AuthorizationInterceptor implements ICo
 
 	public SecurityInterceptor(ContextProvider contextProvider) {
 		this.contextProvider = contextProvider;
+	}
+
+	@Override
+	public void incomingRequestPreHandled(RequestDetails theRequest, Pointcut thePointcut) {
+		// We move the security checks from the PRE_HANDLED pointcut to the earlier POST_PROCESSED pointcut
+	}
+
+	@Hook(value = Pointcut.SERVER_INCOMING_REQUEST_POST_PROCESSED, order = 100)
+	public boolean incomingRequestPostProcessed(RequestDetails requestDetails, Pointcut pointcut) {
+		super.incomingRequestPreHandled(requestDetails, pointcut);
+		return true;
 	}
 
 	@Override

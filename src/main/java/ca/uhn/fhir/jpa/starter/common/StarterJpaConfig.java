@@ -271,7 +271,6 @@ public class StarterJpaConfig {
 		fhirServer.registerProviders(resourceProviderFactory.createProviders());
 		fhirServer.registerProvider(jpaSystemProvider);
 		fhirServer.setServerConformanceProvider(calculateConformanceProvider(fhirSystemDao, fhirServer, daoConfig, searchParamRegistry, theValidationSupport));
-		fhirServer.registerInterceptor(serviceRequestInterceptor);
 
 		fhirServer.registerInterceptor(securityInterceptor);
 		fhirServer.registerInterceptor(new ConsentInterceptor(securityInterceptor));

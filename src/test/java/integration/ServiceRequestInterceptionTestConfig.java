@@ -1,10 +1,6 @@
 package integration;
 
-import be.cegeka.vconsult.security.AuthorizationException;
-import be.cegeka.vconsult.security.api.Context;
 import be.cegeka.vconsult.security.api.ContextProvider;
-import be.cegeka.vconsult.security.test.EnableMockSecurityLib;
-import be.cegeka.vconsult.security.test.MockContext;
 import ca.uhn.fhir.rest.api.server.RequestDetails;
 import ca.uhn.fhir.rest.server.interceptor.auth.RuleBuilder;
 import ca.uhn.fhir.rest.server.interceptor.consent.ConsentOutcome;
@@ -12,20 +8,20 @@ import ca.uhn.fhir.rest.server.interceptor.consent.IConsentContextServices;
 import com.cegeka.vconsult.fhir.server.security.SecurityInterceptor;
 import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Primary;
-
-import java.io.IOException;
-import java.util.Set;
+import org.springframework.context.annotation.Configuration;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-public class TestConfiguration {
-	@Primary
+@Configuration
+public class ServiceRequestInterceptionTestConfig {
+
 	@Bean
 	public SecurityInterceptor securityInterceptor() {
 		SecurityInterceptor securityInterceptorMock = mock(SecurityInterceptor.class);
+		when(securityInterceptorMock.incomingRequestPostProcessed(any(), any())).thenReturn(true);
+
 		when(securityInterceptorMock.buildRuleList(any(RequestDetails.class))).thenReturn(
 			new RuleBuilder()
 				.allowAll()
@@ -39,7 +35,6 @@ public class TestConfiguration {
 		return securityInterceptorMock;
 	}
 
-	@Primary
 	@Bean
 	public ContextProvider contextProvider() {
 		return mock(ContextProvider.class);

@@ -30,9 +30,7 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.List;
 
-@Interceptor(
-	order = 1000
-)
+@Interceptor
 @Component
 public class ServiceRequestInterceptor {
 	public static final String REQUEST_PARAMETER_HOSPITAL_ID = "hospitalId";
@@ -57,15 +55,14 @@ public class ServiceRequestInterceptor {
 	/**
 	 * Interrupt HAPI processing and let fhir sync handle the creation instead if request is to create a service request
 	 */
-//	@Hook(Pointcut.SERVER_INCOMING_REQUEST_POST_PROCESSED)
-	@Hook(Pointcut.SERVER_INCOMING_REQUEST_PRE_HANDLED)
-	public void handleIncomingRequest(RequestDetails requestDetails, HttpServletResponse response) throws IOException {
+	@Hook(value = Pointcut.SERVER_INCOMING_REQUEST_POST_PROCESSED, order = 200)
+	public boolean incomingRequestPostProcessed(RequestDetails requestDetails, HttpServletResponse response) throws IOException {
 		if (isRequestToCreateServiceRequest(requestDetails) && requestContainsPartition(requestDetails)) {
 			handleServiceRequestCreation(requestDetails, response);
-			//return false;
+			return false;
 		}
 
-		//return true;
+		return true;
 	}
 
 	private boolean isRequestToCreateServiceRequest(RequestDetails requestDetails) {

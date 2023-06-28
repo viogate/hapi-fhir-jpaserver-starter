@@ -18,8 +18,8 @@ public class TestConfiguration {
 	@Bean
 	public ServiceRequestInterceptor serviceRequestInterceptor() throws IOException {
 		ServiceRequestInterceptor serviceRequestInterceptorMock = mock(ServiceRequestInterceptor.class);
-//		when(serviceRequestInterceptorMock.handleIncomingRequest(any(RequestDetails.class), any(HttpServletResponse.class)))
-//			.thenReturn(true);
+		when(serviceRequestInterceptorMock.incomingRequestPostProcessed(any(RequestDetails.class), any(HttpServletResponse.class)))
+				.thenReturn(true);
 		return serviceRequestInterceptorMock;
 	}
 }

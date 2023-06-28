@@ -3,9 +3,6 @@ package integration;
 import be.cegeka.vconsult.security.AuthorizationException;
 import be.cegeka.vconsult.security.api.Context;
 import be.cegeka.vconsult.security.api.ContextProvider;
-import be.cegeka.vconsult.security.test.MockContext;
-import ca.uhn.fhir.context.FhirContext;
-import ca.uhn.fhir.jpa.starter.Application;
 import com.cegeka.vconsult.fhir.server.TestableApplication;
 import com.github.tomakehurst.wiremock.junit5.WireMockRuntimeInfo;
 import com.github.tomakehurst.wiremock.junit5.WireMockTest;
@@ -34,9 +31,11 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(SpringExtension.class)
 @WireMockTest
-@SpringBootTest(classes = {TestableApplication.class, TestConfiguration.class}, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(
+	classes = {TestableApplication.class, ServiceRequestInterceptionTestConfig.class},
+	webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+	properties = {"security.insecure=/**", "security.secure="})
 public class ServiceRequestInterceptionTest {
-	private final static FhirContext ctx = FhirContext.forR4();
 
 	private final static String FHIR_SYNC_RESPONSE_BODY =
 		"{" +
@@ -46,6 +45,7 @@ public class ServiceRequestInterceptionTest {
 	private static final String LOCALHOST = "http://localhost:";
 	private static final String APPLICATION_FHIR_JSON = "application/fhir+json";
 	private static final String PARTITION = "D123";
+	private static final String FHIR = "/fhir/";
 
 	@LocalServerPort
 	private int localPort;
@@ -66,8 +66,6 @@ public class ServiceRequestInterceptionTest {
 	@DynamicPropertySource
 	static void registerDynamicProperties(DynamicPropertyRegistry registry) {
 		registry.add("fhirSync.url", () -> "http://localhost:" + fhirSyncPort);
-		registry.add("security.insecure", () -> "/**");
-		registry.add("security.secure", () -> "");
 	}
 
 	@BeforeEach
@@ -86,8 +84,7 @@ public class ServiceRequestInterceptionTest {
 		when(contextProvider.getContext(Mockito.any())).thenReturn(contextMock);
 
 		String requestBody = "{ \"resourceType\": \"ServiceRequest\" }";
-		ResponseEntity<String> response = restTemplate.exchange(LOCALHOST + localPort + "/fhir/{partition}/ServiceRequest", HttpMethod.POST, newRequest(requestBody), String.class, PARTITION);
-
+		ResponseEntity<String> response = restTemplate.exchange(LOCALHOST + localPort + FHIR + "{partition}/ServiceRequest", HttpMethod.POST, newRequest(requestBody), String.class, PARTITION);
 
 		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
 		assertThat(response.getBody()).isEqualTo(FHIR_SYNC_RESPONSE_BODY);
@@ -97,12 +94,11 @@ public class ServiceRequestInterceptionTest {
 	@Test
 	public void serviceRequestPostWithPartitionAndHospitalIdIsInterceptedAndForwardedToFhirSync() throws AuthorizationException {
 		Context contextMock = mock(Context.class);
-		when(contextMock.getHospital()).thenReturn(null);
 		when(contextMock.getHospital()).thenReturn(100);
 
 		when(contextProvider.getContext(Mockito.any())).thenReturn(contextMock);
 		String requestBody = "{ \"resourceType\": \"ServiceRequest\" }";
-		restTemplate.exchange(LOCALHOST + localPort + "/fhir/{partition}/ServiceRequest", HttpMethod.POST, newRequest(requestBody), String.class, PARTITION);
+		restTemplate.exchange(LOCALHOST + localPort + FHIR + "{partition}/ServiceRequest", HttpMethod.POST, newRequest(requestBody), String.class, PARTITION);
 
 		verify(postRequestedFor(urlEqualTo(fhirSyncDraftEndpoint + "/" + PARTITION + "?hospitalId=100")));
 	}
@@ -115,7 +111,7 @@ public class ServiceRequestInterceptionTest {
 
 		when(contextProvider.getContext(Mockito.any())).thenReturn(contextMock);
 		String requestBody = "{ \"resourceType\": \"ServiceRequest\" }";
-		restTemplate.exchange(LOCALHOST + localPort + "/fhir/{partition}/ServiceRequest", HttpMethod.POST, newRequest(requestBody), String.class, PARTITION);
+		restTemplate.exchange(LOCALHOST + localPort + FHIR + "{partition}/ServiceRequest", HttpMethod.POST, newRequest(requestBody), String.class, PARTITION);
 
 		verify(postRequestedFor(urlEqualTo(fhirSyncDraftEndpoint + "/" + PARTITION + "?userShortId=50")));
 	}
@@ -128,7 +124,7 @@ public class ServiceRequestInterceptionTest {
 
 		when(contextProvider.getContext(Mockito.any())).thenReturn(contextMock);
 		String requestBody = "{ \"resourceType\": \"ServiceRequest\" }";
-		restTemplate.exchange(LOCALHOST + localPort + "/fhir/{partition}/ServiceRequest", HttpMethod.POST, newRequest(requestBody), String.class, PARTITION);
+		restTemplate.exchange(LOCALHOST + localPort + FHIR + "{partition}/ServiceRequest", HttpMethod.POST, newRequest(requestBody), String.class, PARTITION);
 
 		verify(postRequestedFor(urlEqualTo(fhirSyncDraftEndpoint + "/" + PARTITION + "?userShortId=50&hospitalId=100")));
 	}
@@ -141,7 +137,7 @@ public class ServiceRequestInterceptionTest {
 				"\"id\": \"A001234234\"" +
 				"}";
 
-		ResponseEntity<String> response = restTemplate.exchange(LOCALHOST + localPort + "/fhir/{partition}/ServiceRequest/{id}", HttpMethod.PUT, newRequest(requestBody), String.class, Map.of("partition", PARTITION, "id", "A001234234"));
+		ResponseEntity<String> response = restTemplate.exchange(LOCALHOST + localPort + FHIR + "{partition}/ServiceRequest/{id}", HttpMethod.PUT, newRequest(requestBody), String.class, Map.of("partition", PARTITION, "id", "A001234234"));
 
 		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
 		assertThat(response.getBody()).isNotEqualTo(FHIR_SYNC_RESPONSE_BODY);
@@ -152,7 +148,7 @@ public class ServiceRequestInterceptionTest {
 	public void otherResourcePostIsNotIntercepted() {
 		String requestBody = "{ \"resourceType\": \"Organization\" }";
 
-		ResponseEntity<String> response = restTemplate.exchange(LOCALHOST + localPort + "/fhir/{partition}/Organization", HttpMethod.POST, newRequest(requestBody), String.class, PARTITION);
+		ResponseEntity<String> response = restTemplate.exchange(LOCALHOST + localPort + FHIR + "{partition}/Organization", HttpMethod.POST, newRequest(requestBody), String.class, PARTITION);
 
 		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
 		assertThat(response.getBody()).isNotEqualTo(FHIR_SYNC_RESPONSE_BODY);
@@ -176,7 +172,7 @@ public class ServiceRequestInterceptionTest {
 				"}]" +
 				"}";
 
-		ResponseEntity<String> response = restTemplate.exchange(LOCALHOST + localPort + "/fhir/{partition}", HttpMethod.POST, newRequest(requestBody), String.class, PARTITION);
+		ResponseEntity<String> response = restTemplate.exchange(LOCALHOST + localPort + FHIR + "{partition}", HttpMethod.POST, newRequest(requestBody), String.class, PARTITION);
 
 		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
 		assertThat(response.getBody()).isNotEqualTo(FHIR_SYNC_RESPONSE_BODY);
@@ -198,7 +194,7 @@ public class ServiceRequestInterceptionTest {
 				"\"valueString\": \"partition\"" +
 				"} ]" +
 				"}";
-		restTemplate.exchange(LOCALHOST + localPort + "/fhir/root/$partition-management-create-partition", HttpMethod.POST, newRequest(requestBody), String.class);
+		restTemplate.exchange(LOCALHOST + localPort + FHIR + "root/$partition-management-create-partition", HttpMethod.POST, newRequest(requestBody), String.class);
 	}
 
 	private HttpEntity<String> newRequest(String body) {
