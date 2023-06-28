@@ -57,14 +57,15 @@ public class ServiceRequestInterceptor {
 	/**
 	 * Interrupt HAPI processing and let fhir sync handle the creation instead if request is to create a service request
 	 */
-	@Hook(Pointcut.SERVER_INCOMING_REQUEST_POST_PROCESSED)
-	public boolean handleIncomingRequest(RequestDetails requestDetails, HttpServletResponse response) throws IOException {
+//	@Hook(Pointcut.SERVER_INCOMING_REQUEST_POST_PROCESSED)
+	@Hook(Pointcut.SERVER_INCOMING_REQUEST_PRE_HANDLED)
+	public void handleIncomingRequest(RequestDetails requestDetails, HttpServletResponse response) throws IOException {
 		if (isRequestToCreateServiceRequest(requestDetails) && requestContainsPartition(requestDetails)) {
 			handleServiceRequestCreation(requestDetails, response);
-			return false;
+			//return false;
 		}
 
-		return true;
+		//return true;
 	}
 
 	private boolean isRequestToCreateServiceRequest(RequestDetails requestDetails) {
