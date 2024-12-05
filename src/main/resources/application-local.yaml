@@ -15,7 +15,7 @@ security:
 
 spring:
   datasource:
-    url: "jdbc:postgresql://valvconsultdbdev01.dev.viollier.ch/dev-fhir-server"
+    url: "jdbc:postgresql://valvconsultdbfhirdev01.dev.viollier.ch/dev-fhir-server"
     driverClassName: org.postgresql.Driver
     username: gijs
     password: //TODO use own personal postgress creds
